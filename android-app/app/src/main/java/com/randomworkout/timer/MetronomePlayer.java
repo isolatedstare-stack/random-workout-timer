@@ -5,87 +5,117 @@ import android.media.AudioFormat;
 import android.media.AudioTrack;
 
 /**
- * Plays a sample-accurate metronome using a single repeating PCM buffer.
- * No JavaScript or Java timers are involved in scheduling the beats.
- * All methods are called on the Activity UI thread.
+ * Streams a click track through Android AudioTrack instead of relying on device-
+ * specific static-buffer loop-point support. The worker's blocking writes are
+ * paced by the native audio device, not by WebView or JavaScript timers.
  */
 final class MetronomePlayer {
-    private static final int SAMPLE_RATE = 44100;
-    private static final float NORMAL_VOLUME = 0.72f;
-    private static final float DUCK_VOLUME = NORMAL_VOLUME * 0.20f;
-    private AudioTrack track;
-    private boolean ducked;
+    interface Listener { void onState(boolean started, String detail); }
 
-    boolean start(int bpm) {
+    private static final int SAMPLE_RATE = 48000;
+    private static final float NORMAL_VOLUME = 0.90f;
+    private static final float DUCK_VOLUME = NORMAL_VOLUME * 0.20f;
+    private volatile AudioTrack track;
+    private volatile Thread worker;
+    private volatile boolean ducked;
+    private volatile int generation;
+
+    synchronized boolean start(int bpm, Listener listener) {
         stop();
-        if (bpm < 20 || bpm > 300) return false;
-        int beatFrames = (int) Math.round(SAMPLE_RATE * 60.0 / bpm);
-        byte[] pcm = new byte[beatFrames * 2];
-        int clickFrames = Math.min(beatFrames, (int) (SAMPLE_RATE * 0.070));
-        for (int i = 0; i < clickFrames; i++) {
-            double seconds = i / (double) SAMPLE_RATE;
-            // A short bright tap with a quick attack and smooth exponential decay.
-            double attack = Math.min(1.0, i / (SAMPLE_RATE * 0.0025));
-            double envelope = attack * Math.exp(-seconds * 62.0);
-            double wave = Math.sin(2.0 * Math.PI * 1150.0 * seconds)
-                    + 0.22 * Math.sin(2.0 * Math.PI * 1725.0 * seconds);
-            int sample = (int) Math.round(32767.0 * 0.66 * envelope * wave);
-            sample = Math.max(-32768, Math.min(32767, sample));
-            pcm[i * 2] = (byte) sample;
-            pcm[i * 2 + 1] = (byte) (sample >>> 8);
+        if (bpm < 20 || bpm > 300) {
+            listener.onState(false, "BPM must be between 20 and 300.");
+            return false;
         }
-        AudioTrack created = null;
+        int token = ++generation;
+        ducked = false;
+        Thread next = new Thread(() -> runAudio(bpm, token, listener), "WorkoutMetronome");
+        next.setDaemon(true);
+        worker = next;
+        next.start();
+        return true;
+    }
+
+    private void runAudio(int bpm, int token, Listener listener) {
+        AudioTrack output = null;
         try {
-            created = new AudioTrack.Builder()
+            int minBytes = AudioTrack.getMinBufferSize(SAMPLE_RATE,
+                    AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
+            if (minBytes <= 0) throw new IllegalStateException("Audio output does not support 48 kHz PCM.");
+            output = new AudioTrack.Builder()
                     .setAudioAttributes(new AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                             .build())
                     .setAudioFormat(new AudioFormat.Builder()
                             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                             .setSampleRate(SAMPLE_RATE)
                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                             .build())
-                    .setTransferMode(AudioTrack.MODE_STATIC)
-                    .setBufferSizeInBytes(pcm.length)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .setBufferSizeInBytes(Math.max(minBytes, 16384))
                     .build();
-            if (created.getState() != AudioTrack.STATE_INITIALIZED) {
-                created.release();
-                return false;
+            if (output.getState() != AudioTrack.STATE_INITIALIZED)
+                throw new IllegalStateException("Android could not initialize the audio stream.");
+            if (token != generation) return;
+            track = output;
+            output.setVolume(ducked ? DUCK_VOLUME : NORMAL_VOLUME);
+
+            int beatFrames = (int) Math.round(SAMPLE_RATE * 60.0 / bpm);
+            int clickFrames = Math.min(beatFrames, SAMPLE_RATE / 10);
+            short[] click = new short[clickFrames];
+            for (int i = 0; i < clickFrames; i++) {
+                double seconds = i / (double) SAMPLE_RATE;
+                double attack = Math.min(1.0, i / (SAMPLE_RATE * 0.0015));
+                double envelope = attack * Math.exp(-seconds * 35.0);
+                double wave = Math.sin(2.0 * Math.PI * 1020.0 * seconds)
+                        + 0.23 * Math.sin(2.0 * Math.PI * 1610.0 * seconds);
+                int value = (int) Math.round(32767.0 * 0.72 * envelope * wave);
+                click[i] = (short) Math.max(-32768, Math.min(32767, value));
             }
-            int bytesWritten = created.write(pcm, 0, pcm.length);
-            if (bytesWritten != pcm.length || created.setLoopPoints(0, beatFrames, -1) != AudioTrack.SUCCESS) {
-                created.release();
-                return false;
+            short[] block = new short[2048];
+            long frame = 0;
+            output.play();
+            if (token == generation) listener.onState(true, "Metronome audio stream started at " + bpm + " BPM.");
+            while (token == generation && !Thread.currentThread().isInterrupted()) {
+                for (int i = 0; i < block.length; i++, frame++) {
+                    int beatPosition = (int) (frame % beatFrames);
+                    block[i] = beatPosition < clickFrames ? click[beatPosition] : 0;
+                }
+                int written = output.write(block, 0, block.length, AudioTrack.WRITE_BLOCKING);
+                if (written < 0) throw new IllegalStateException("Audio write failed (" + written + ").");
+                if (written == 0) Thread.yield();
             }
-            created.setVolume(NORMAL_VOLUME);
-            created.play();
-            track = created;
-            return true;
         } catch (Exception ex) {
-            if (created != null) {
-                try { created.release(); } catch (Exception ignored) { }
+            if (token == generation) listener.onState(false,
+                    "Metronome audio failed: " + ex.getClass().getSimpleName() + " — " + ex.getMessage());
+        } finally {
+            if (track == output) track = null;
+            if (output != null) {
+                try { output.pause(); } catch (Exception ignored) { }
+                try { output.flush(); } catch (Exception ignored) { }
+                try { output.release(); } catch (Exception ignored) { }
             }
-            return false;
         }
     }
 
     void setDucked(boolean enabled) {
         ducked = enabled;
-        if (track != null) {
-            try { track.setVolume(ducked ? DUCK_VOLUME : NORMAL_VOLUME); }
+        AudioTrack current = track;
+        if (current != null) {
+            try { current.setVolume(ducked ? DUCK_VOLUME : NORMAL_VOLUME); }
             catch (Exception ignored) { }
         }
     }
 
-    void stop() {
-        AudioTrack previous = track;
+    synchronized void stop() {
+        generation++;
+        Thread oldWorker = worker;
+        worker = null;
+        AudioTrack oldTrack = track;
         track = null;
-        ducked = false;
-        if (previous != null) {
-            try { previous.pause(); } catch (Exception ignored) { }
-            try { previous.flush(); } catch (Exception ignored) { }
-            try { previous.release(); } catch (Exception ignored) { }
+        if (oldTrack != null) {
+            try { oldTrack.stop(); } catch (Exception ignored) { }
         }
+        if (oldWorker != null) oldWorker.interrupt();
     }
 }

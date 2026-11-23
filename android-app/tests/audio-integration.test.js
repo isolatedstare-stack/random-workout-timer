@@ -9,12 +9,15 @@ const manifest = fs.readFileSync(path.join(base,'AndroidManifest.xml'),'utf-8');
 assert.match(ui,/AndroidSpeech\.startAction\(item\.ttsName,'system',Boolean\(item\.metronome\),Number\(item\.bpm\)\|\|120\)/);
 assert.match(ui,/function nativeStop\(\).*AndroidSpeech\.stop\(\)/);
 assert.match(native,/void startAction\(String text, String languageTag, boolean useMetronome, int bpm\)/);
-assert.match(native,/haltActionAudio\(\);\s*if \(useMetronome && !metronomePlayer\.start\(bpm\)\)/);
+assert.match(native,/haltActionAudio\(\);\s*if \(useMetronome\) metronomePlayer\.start\(bpm/);
 assert.match(native,/metronomePlayer\.setDucked\(true\)/);
 assert.match(native,/metronomePlayer\.setDucked\(false\)/);
 assert.match(native,/releaseSessionWakeLock\(\)/);
-assert.match(metro,/AudioTrack\.MODE_STATIC/);
-assert.match(metro,/setLoopPoints\(0, beatFrames, -1\)/);
+assert.match(metro,/AudioTrack\.MODE_STREAM/);
+assert.match(metro,/AudioTrack\.WRITE_BLOCKING/);
 assert.match(metro,/NORMAL_VOLUME \* 0\.20f/);
 assert.match(manifest,/android\.permission\.WAKE_LOCK/);
 console.log('Stage 3 Android audio integration checks: PASSED');
+
+assert.match(ui,/data-do=\"test-metronome\"/);
+assert.match(native,/void testMetronome\(int bpm\)/);

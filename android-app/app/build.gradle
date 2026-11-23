@@ -18,11 +18,11 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.randomworkout.timer.stage3'
+        applicationId 'com.randomworkout.timer.stage31'
         minSdk 26
         targetSdk 35
-        versionCode 50
-        versionName '3.0-stage3'
+        versionCode 51
+        versionName '3.1-metronome-fix'
     }
 
     signingConfigs {

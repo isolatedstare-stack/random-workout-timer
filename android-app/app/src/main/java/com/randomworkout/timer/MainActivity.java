@@ -8,6 +8,8 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
@@ -60,6 +62,7 @@ public class MainActivity extends Activity {
     private final MetronomePlayer metronomePlayer = new MetronomePlayer();
     private PowerManager.WakeLock sessionWakeLock;
     private volatile String activeUtteranceId;
+    private boolean testingMetronome;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -225,9 +228,26 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void startAction(String text, String languageTag, boolean useMetronome, int bpm) {
             runOnUiThread(() -> {
                 haltActionAudio();
-                if (useMetronome && !metronomePlayer.start(bpm))
-                    notifyWeb("metronome-error", "Metronome could not start. Check the BPM (20–300) and media volume.");
+                if (useMetronome) metronomePlayer.start(bpm, (started, detail) -> {
+                    notifyWeb(started ? "metronome-started" : "metronome-error", detail);
+                });
                 speakNow(text, languageTag);
+            });
+        }
+        @JavascriptInterface public void testMetronome(int bpm) {
+            runOnUiThread(() -> {
+                haltActionAudio();
+                testingMetronome = true;
+                metronomePlayer.start(bpm, (started, detail) -> {
+                    notifyWeb(started ? "metronome-test-started" : "metronome-error", detail);
+                });
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    if (testingMetronome) {
+                        testingMetronome = false;
+                        metronomePlayer.stop();
+                        notifyWeb("metronome-test-ended", "Metronome test finished.");
+                    }
+                }, 5000);
             });
         }
         @JavascriptInterface public void stop() {
@@ -345,6 +365,7 @@ public class MainActivity extends Activity {
     }
 
     private void haltActionAudio() {
+        testingMetronome = false;
         queuedText = null;
         queuedLanguage = null;
         activeUtteranceId = null;
