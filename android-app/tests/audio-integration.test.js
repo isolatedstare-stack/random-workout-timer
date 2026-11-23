@@ -42,3 +42,10 @@ assert.ok(deleteSet[0].indexOf('!confirm(') < deleteSet[0].indexOf('s.sets='),
 assert.match(deleteSession[0], /cannot be undone/i);
 assert.match(deleteSet[0], /cannot be undone/i);
 console.log('Session and set deletion confirmation guards: PASSED');
+
+assert.match(native,/String availableVoices\(\)/);
+assert.match(native,/void setPreferredVoice\(String voiceName\)/);
+assert.match(native,/voice\.isNetworkConnectionRequired\(\)/);
+assert.match(native,/tts\.setVoice\(chosen\)/);
+assert.match(ui,/session\(\)\?\.voiceName\|\|''/);
+console.log('Session-scoped offline TTS voices: PASSED');
