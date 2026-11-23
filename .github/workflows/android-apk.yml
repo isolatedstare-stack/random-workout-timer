@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/beta3.2-weighted-bpm]
+    branches: [main, feature/beta3.2-weighted-bpm, feature/beta3.3-configuration-ux]
     paths:
       - 'android-app/**'
       - '.github/workflows/android-apk.yml'
@@ -30,6 +30,7 @@ jobs:
           node android-app/tests/model.test.js
           node android-app/tests/engine.test.js
           node android-app/tests/audio-integration.test.js
+          node android-app/tests/ux.test.js
       - name: Require and validate persistent signing key
         env:
           RWT_SIGNING_KEYSTORE_B64: ${{ secrets.RWT_SIGNING_KEYSTORE_B64 }}
