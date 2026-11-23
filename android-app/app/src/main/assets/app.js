@@ -25,8 +25,6 @@
  function numberField(label,path,val,min,max){return field(label,path,val,'number',`min="${min}" max="${max}" step="1"`)}
  function statusChip(items){return `<span class="pill ${items.length?'warn':''}">${items.length?'Needs attention · '+items.length:'Ready'}</span>`}
  function actionButtons(list,index,group,id,allowDelete=true){return `<details class="card-menu"><summary>More options</summary><div class="menu-actions">
- <button class="secondary icon" data-do="move-${group}" data-id="${id}" data-dir="-1" ${index===0?'disabled':''} aria-label="Move up">↑ Move up</button>
- <button class="secondary icon" data-do="move-${group}" data-id="${id}" data-dir="1" ${index===list.length-1?'disabled':''} aria-label="Move down">↓ Move down</button>
  <button class="secondary icon" data-do="copy-${group}" data-id="${id}">Duplicate</button>
  <button class="danger icon" data-do="delete-${group}" data-id="${id}" ${!allowDelete?'disabled title="At least one is required"':''}>Delete</button>
  </div></details>`}
@@ -50,7 +48,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  </section>`}
  function sessionPage(){const s=session();if(!s)return home();const issues=issuesFor('sessionId',s.id);return `${breadcrumbs('session')}<section class="panel"><div class="row between"><h2>Session settings</h2>${statusChip(issues)}</div>${nameField('Session name','session.name',s.name)}<p class="hint">Names must be unique across sessions.</p>${issueHTML(issues.filter(x=>!x.setId))}</section>
  <section class="panel"><div class="row between wrap"><h2>Sets <span class="tag">${s.sets.length}</span></h2><div class="actions"><button data-do="new-set-reps">+ Reps set</button><button class="secondary" data-do="new-set-time">+ Timed set</button></div></div><p class="muted small">Drag ⠿ to reorder sets.</p>
- ${'<div class="sortable-list" data-sort-group="set">'}${s.sets.map((t,i)=>{const localIssues=issues.filter(x=>x.setId===t.id);return `<article class="card sortable-card" data-sort-id="${esc(t.id)}"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(t.name)}</div><div class="card-meta">${t.type==='reps'?'Reps-based · '+t.repetitions+' repetitions':'Time-based · '+t.duration.min+'–'+t.duration.max+'s'} · ${t.actions.length} action${t.actions.length===1?'':'s'}</div></div><div class="card-side">${statusChip(localIssues)}<button type="button" class="drag-handle" data-drag-handle="set" aria-label="Drag to reorder set ${esc(t.name)}" title="Drag to reorder">⠿</button></div></div><div class="card-controls"><button data-do="open-set" data-id="${t.id}">Configure</button>${actionButtons(s.sets,i,'set',t.id,s.sets.length>1)}</div></article>`}).join('')}</div></section>`}
+ ${'<div class="sortable-list" data-sort-group="set">'}${s.sets.map((t,i)=>{const localIssues=issues.filter(x=>x.setId===t.id);return `<article class="card sortable-card" data-sort-id="${esc(t.id)}"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(t.name)}</div><div class="card-meta">${t.type==='reps'?'Reps-based · '+t.repetitions+' repetitions':'Time-based · '+t.duration.min+'–'+t.duration.max+'s'} · ${t.actions.length} action${t.actions.length===1?'':'s'}</div></div><div class="card-side">${statusChip(localIssues)}<button type="button" class="drag-handle" data-drag-handle="set" aria-label="Drag to reorder set ${esc(t.name)}" title="Drag to reorder; arrow keys also work" aria-keyshortcuts="ArrowUp ArrowDown">⠿</button></div></div><div class="card-controls"><button data-do="open-set" data-id="${t.id}">Configure</button>${actionButtons(s.sets,i,'set',t.id,s.sets.length>1)}</div></article>`}).join('')}</div></section>`}
  function setPage(){const s=session(),t=set();if(!s||!t)return home();const issues=issuesFor('setId',t.id),group=t.actions.filter(a=>a.exclusive);return `${breadcrumbs('set')}<section class="panel"><div class="row between"><h2>Set settings</h2>${statusChip(issues)}</div>
  ${nameField('Set name','set.name',t.name)}
  ${field('Set type','set.type',t.type,'select',[['reps','Reps-based'],['time','Time-based']])}
@@ -58,7 +56,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  ${issueHTML(issues.filter(x=>!x.actionId))}</section>
  <section class="panel"><div class="row between wrap"><h2>Actions <span class="tag">${t.actions.length}</span></h2><button data-do="new-action">+ Add action</button></div><p class="muted small">Drag ⠿ to reorder actions.</p>
  ${t.type==='reps'&&group.length?`<div class="exclusive"><strong>Mutual-exclusion group:</strong> ${group.length} action${group.length===1?'':'s'}, total ${group.reduce((sum,a)=>sum+a.probability,0)}%. ${group.length<2?'Add a second exclusive action.':group.reduce((sum,a)=>sum+a.probability,0)!==100?'Adjust probabilities to total 100%.':'Group is valid.'}</div>`:''}
- ${'<div class="sortable-list" data-sort-group="action">'}${t.actions.map((a,i)=>{const localIssues=issues.filter(x=>x.actionId===a.id);return `<article class="card sortable-card" data-sort-id="${esc(a.id)}"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(a.name)}</div><div class="card-meta">${a.duration.min}–${a.duration.max}s${a.metronome?' · '+(a.bpmStart??a.bpm)+(a.bpmMode==='progressive'?' → ':'–')+(a.bpmFinish??a.bpm)+' BPM':''}${t.type==='time'?' · Weight '+(a.weight??1):''}${t.type==='reps'&&a.exclusive?' · Exclusive '+a.probability+'%':''}</div></div><div class="card-side">${statusChip(localIssues)}<button type="button" class="drag-handle" data-drag-handle="action" aria-label="Drag to reorder action ${esc(a.name)}" title="Drag to reorder">⠿</button></div></div><div class="card-controls"><button data-do="open-action" data-id="${a.id}">Configure</button>${actionButtons(t.actions,i,'action',a.id,t.actions.length>1)}</div></article>`}).join('')}</div>
+ ${'<div class="sortable-list" data-sort-group="action">'}${t.actions.map((a,i)=>{const localIssues=issues.filter(x=>x.actionId===a.id);return `<article class="card sortable-card" data-sort-id="${esc(a.id)}"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(a.name)}</div><div class="card-meta">${a.duration.min}–${a.duration.max}s${a.metronome?' · '+(a.bpmStart??a.bpm)+(a.bpmMode==='progressive'?' → ':'–')+(a.bpmFinish??a.bpm)+' BPM':''}${t.type==='time'?' · Weight '+(a.weight??1):''}${t.type==='reps'&&a.exclusive?' · Exclusive '+a.probability+'%':''}</div></div><div class="card-side">${statusChip(localIssues)}<button type="button" class="drag-handle" data-drag-handle="action" aria-label="Drag to reorder action ${esc(a.name)}" title="Drag to reorder; arrow keys also work" aria-keyshortcuts="ArrowUp ArrowDown">⠿</button></div></div><div class="card-controls"><button data-do="open-action" data-id="${a.id}">Configure</button>${actionButtons(t.actions,i,'action',a.id,t.actions.length>1)}</div></article>`}).join('')}</div>
  </section>`}
  function actionPage(){const s=session(),t=set(),a=action();if(!s||!t||!a)return home();const issues=issuesFor('actionId',a.id);return `${breadcrumbs('action')}
  <section class="panel"><div class="row between"><h2>Action settings</h2>${statusChip(issues)}</div>
@@ -135,7 +133,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
    else if(route.screen==='set')go('session',route.sessionId);
    else if(route.screen==='session'||route.screen==='prestart')go('home');
  }
- function onButton(node){const cmd=node.dataset.do,id=node.dataset.id,dir=Number(node.dataset.dir);
+ function onButton(node){const cmd=node.dataset.do,id=node.dataset.id;
  if(['pause-session','resume-session','skip-action','skip-set','stop-session','finish-exit'].includes(cmd)){playCommand(cmd);return;}
  if(cmd==='show-timers'||cmd==='hide-timers'){showTimes=cmd==='show-timers';render();return;}
  if(cmd==='begin-session'){begin();return;}
@@ -157,8 +155,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  if(cmd==='delete-session'){const s=store.sessions.find(x=>x.id===id);if(!s||!confirm('Delete "'+s.name+'" and ALL its sets and actions? This cannot be undone.'))return;store.sessions=store.sessions.filter(x=>x.id!==id);save();render();toast('Session deleted.');return;}
  if(cmd==='delete-set'){const s=session(),t=s.sets.find(x=>x.id===id);if(!t)return;if(s.sets.length<=1){toast('Every session must have at least one set.',true);return;}if(!confirm('Delete set "'+t.name+'" and all its actions? This cannot be undone.'))return;s.sets=s.sets.filter(x=>x.id!==id);save();render();toast('Set deleted.');return;}
  if(cmd==='delete-action'){const t=set(),a=t.actions.find(x=>x.id===id);if(!a)return;if(t.actions.length<=1){toast('Every set must have at least one action.',true);return;}if(!confirm('Delete action "'+a.name+'"?'))return;t.actions=t.actions.filter(x=>x.id!==id);save();render();toast('Action deleted.');return;}
- if(cmd?.startsWith('move-')){const group=cmd.slice(5),list=group==='set'?session()?.sets:set()?.actions;const i=list?.findIndex(x=>x.id===id);if(i===undefined||i<0)return;M.move(list,i,dir);save();render();return;}
- if(cmd==='restore-tts'){const a=action();if(a){a.ttsName=a.name;a.ttsCustomized=false;save();render();toast('Announcement now follows the action name.')}return;}
+  if(cmd==='restore-tts'){const a=action();if(a){a.ttsName=a.name;a.ttsCustomized=false;save();render();toast('Announcement now follows the action name.')}return;}
  if(cmd==='test-metronome'){const a=action();if(!a?.metronome)return toast('Enable the metronome first.',true);if(window.AndroidSpeech&&typeof AndroidSpeech.testMetronome==='function'){AndroidSpeech.testMetronome(Number(a.bpmStart??a.bpm)||120);toast('Previewing the starting BPM for 5 seconds.');}else toast('Metronome test requires the Stage 3.1 Android app.',true);return;}
  if(cmd==='test-tts'){const a=action();if(!a?.ttsName.trim())return toast('Enter an announcement first.',true);if(window.AndroidSpeech){AndroidSpeech.speak(a.ttsName,'system');toast('Sending announcement to Android TTS.')}else if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(a.ttsName));}else toast('Speech preview is available in Android.',true);return;}
  if(cmd==='test-end'){if(window.AndroidSpeech&&typeof AndroidSpeech.playCompletionSound==='function'){AndroidSpeech.playCompletionSound();toast('Playing end-of-session chime.');}else{new Audio('session_end_bong.wav').play().then(()=>toast('Playing end-of-session chime.')).catch(()=>toast('Audio preview unavailable.',true));}return;}
@@ -211,6 +208,26 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
    showDropMarker(y);
    dragState.frame=requestAnimationFrame(scrollDuringDrag);
  }
+ // Arrow keys provide accessible reordering without adding visual button clutter.
+ $('#app').addEventListener('keydown',e=>{
+   const handle=e.target.closest('.drag-handle');
+   if(!handle||!['ArrowUp','ArrowDown'].includes(e.key)||dragState)return;
+   const group=handle.dataset.dragHandle;
+   if((group==='set'&&route.screen!=='session')||(group==='action'&&route.screen!=='set'))return;
+   const card=handle.closest('.sortable-card');
+   const items=group==='set'?session()?.sets:set()?.actions;
+   const id=card?.dataset.sortId;
+   const current=items?.findIndex(item=>item.id===id);
+   if(current===undefined||current<0)return;
+   e.preventDefault();
+   const next=current+(e.key==='ArrowUp'?-1:1);
+   if(next<0||next>=items.length)return;
+   if(UX.moveById(items,id,next)){
+     save();render();
+     const moved=Array.from(document.querySelectorAll('.sortable-card')).find(el=>el.dataset.sortId===id);
+     moved?.querySelector('.drag-handle')?.focus();
+   }
+ });
  $('#app').addEventListener('pointerdown',e=>{
    const handle=e.target.closest('[data-drag-handle]');
    if(!handle||(e.pointerType==='mouse'&&e.button!==0)||dragState)return;

@@ -48,3 +48,9 @@ assert.match(src,/function endDrag\(cancelled=false\)/);
 assert.match(src,/UX\.isBackSwipe/);
 assert.match(src,/UX\.moveById/);
 console.log('Beta 3.3 swipe, drag, and menu tests: PASSED');
+
+assert.doesNotMatch(src,/data-do="move-\$\{group\}"/,'Up/Down buttons removed from card menus');
+assert.doesNotMatch(src,/cmd\?\.startsWith\('move-'\)/,'Obsolete move button handler removed');
+assert.match(src,/aria-keyshortcuts="ArrowUp ArrowDown"/,'Drag handles have keyboard support');
+assert.match(src,/addEventListener\('keydown'/,'Keyboard reorder handler installed');
+assert.match(src,/UX\.moveById\(items,id,next\)/,'Keyboard reorder uses the same saved order');
