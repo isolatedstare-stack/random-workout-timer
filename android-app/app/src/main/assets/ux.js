@@ -7,7 +7,7 @@
  'use strict';
  function isBackSwipe(x0,y0,x1,y1){
    const dx=x1-x0,dy=y1-y0;
-   return dx<=-90&&Math.abs(dy)<=Math.min(90,Math.abs(dx)*0.55);
+   return dx<=-70&&Math.abs(dy)<=Math.min(65,Math.abs(dx)*0.5);
  }
  function insertionIndex(midpoints,y){
    const index=midpoints.findIndex(mid=>y<mid);
