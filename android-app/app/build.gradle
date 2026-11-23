@@ -21,8 +21,8 @@ android {
         applicationId 'com.randomworkout.timer.stage31'
         minSdk 26
         targetSdk 35
-        versionCode 57
-        versionName '3.3.3-settings-preview'
+        versionCode 58
+        versionName '3.3.4-ux-voice-preview'
     }
 
     signingConfigs {
