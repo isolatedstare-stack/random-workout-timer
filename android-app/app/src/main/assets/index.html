@@ -48,6 +48,19 @@
 .settings-panel .toggle{margin:14px 0}
 .settings-divider{height:1px;background:var(--border);margin:18px 0}
 .settings-panel .actions{margin-top:8px}
+
+/* Anchored card action menu: never pushes other controls onto new lines */
+.card-menu{position:relative;display:inline-block;flex:0 0 auto}
+.card-menu>summary{white-space:nowrap}
+.card-menu>.menu-actions{position:absolute;z-index:45;top:calc(100% + 5px);right:0;min-width:min(215px,calc(100vw - 50px));margin:0;display:flex;flex-direction:column;align-items:stretch;padding:8px;box-shadow:0 12px 30px #0009}
+.card-menu>.menu-actions button{width:100%;text-align:left;min-height:42px}
+.card:has(.card-menu[open]){position:relative;z-index:40}
+/* Paired values remain two columns even on narrow screens */
+.range-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(max-width:420px){.range-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.range-grid>.field{min-width:0}
+.range-grid .field>span{font-size:.78rem}
+#app{touch-action:pan-y}
 </style></head><body><main>
 <header class="minimal-header"><h1>Workout sessions</h1>
 <details class="app-menu" id="appMenu"><summary aria-label="Open app menu" title="Menu">☰</summary>
