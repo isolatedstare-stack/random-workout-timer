@@ -26,3 +26,19 @@ assert.match(metro,/bpmAt\(int start, int finish, boolean progressive/);
 assert.match(metro,/plannedDurationMs, elapsedMs/);
 assert.match(ui,/set\.timeSelectionPriority/);
 assert.match(ui,/action\.weight/);
+
+// Regression guard: destructive session/set operations must require confirmation
+// before modifying the stored hierarchy. Cancel must leave the data unchanged.
+const deleteSession = ui.match(/if\(cmd==='delete-session'\)\{[^\n]+/);
+const deleteSet = ui.match(/if\(cmd==='delete-set'\)\{[^\n]+/);
+assert.ok(deleteSession, 'Session delete handler exists');
+assert.ok(deleteSet, 'Set delete handler exists');
+assert.match(deleteSession[0], /!confirm\(/, 'Session deletion requires confirmation');
+assert.match(deleteSet[0], /!confirm\(/, 'Set deletion requires confirmation');
+assert.ok(deleteSession[0].indexOf('!confirm(') < deleteSession[0].indexOf('store.sessions='),
+  'Session confirmation precedes destructive mutation');
+assert.ok(deleteSet[0].indexOf('!confirm(') < deleteSet[0].indexOf('s.sets='),
+  'Set confirmation precedes destructive mutation');
+assert.match(deleteSession[0], /cannot be undone/i);
+assert.match(deleteSet[0], /cannot be undone/i);
+console.log('Session and set deletion confirmation guards: PASSED');
