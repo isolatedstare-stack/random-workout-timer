@@ -12,6 +12,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.Voice;
 import android.speech.tts.UtteranceProgressListener;
 import android.view.View;
 import android.view.WindowManager;
@@ -28,6 +29,7 @@ import android.webkit.WebViewClient;
 import androidx.webkit.WebViewAssetLoader;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -35,6 +37,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 
 /**
@@ -63,6 +69,7 @@ public class MainActivity extends Activity {
     private PowerManager.WakeLock sessionWakeLock;
     private volatile String activeUtteranceId;
     private boolean testingMetronome;
+    private volatile String preferredVoiceName = "";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -222,6 +229,27 @@ public class MainActivity extends Activity {
     }
 
     private class AndroidSpeechBridge {
+        @JavascriptInterface public void setPreferredVoice(String voiceName) {
+            preferredVoiceName = voiceName == null ? "" : voiceName;
+        }
+        @JavascriptInterface public String availableVoices() {
+            JSONArray result = new JSONArray();
+            if(!ttsReady || tts==null)return result.toString();
+            Set<Voice> allVoices = tts.getVoices();
+            if(allVoices==null)return result.toString();
+            List<Voice> voices=new ArrayList<>();
+            for(Voice voice:allVoices)if(!voice.isNetworkConnectionRequired())voices.add(voice);
+            voices.sort(Comparator.comparing(v -> v.getLocale().toLanguageTag()+" "+v.getName()));
+            for(Voice voice:voices){
+                JSONObject entry=new JSONObject();
+                try{
+                    entry.put("name",voice.getName());
+                    entry.put("label",voice.getLocale().getDisplayName()+" — "+voice.getName());
+                    result.put(entry);
+                }catch(Exception ignored){}
+            }
+            return result.toString();
+        }
         @JavascriptInterface public void speak(String text, String languageTag) {
             runOnUiThread(() -> speakNow(text, languageTag));
         }
@@ -405,6 +433,17 @@ public class MainActivity extends Activity {
             if (tts.isLanguageAvailable(defaultLocale) >= TextToSpeech.LANG_AVAILABLE) {
                 tts.setLanguage(defaultLocale);
             }
+        }
+        if(!preferredVoiceName.isEmpty()){
+            Voice chosen=null;
+            Set<Voice> voices=tts.getVoices();
+            if(voices!=null)for(Voice voice:voices){
+                if(!voice.isNetworkConnectionRequired()&&preferredVoiceName.equals(voice.getName())){
+                    chosen=voice;break;
+                }
+            }
+            if(chosen==null || tts.setVoice(chosen)==TextToSpeech.ERROR)
+                notifyWeb("voice-unavailable","Selected voice unavailable; Android may use the system voice.");
         }
         String utteranceId = "exercise-" + System.nanoTime();
         activeUtteranceId = utteranceId;
