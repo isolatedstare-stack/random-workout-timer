@@ -78,3 +78,27 @@ console.log('Stage 3.2 model tests: PASSED');
  assert.equal(reloaded.sessions[0].sets[0].actions[0].bpmFinish,null);
  assert(M.validateStore(reloaded).length>0,'Unconfigured drafts cannot start a workout');
 }
+
+// Random progression has exactly two values: Start BPM is the initial tempo,
+// Finish BPM is the opposite bound, not a required final tempo.
+{
+ const workout=M.newSession('Random tempo');
+ const action=workout.sets[0].actions[0];
+ action.metronome=true;action.bpmStart=80;action.bpmFinish=120;action.bpmMode='randomWalk';
+ assert.deepEqual(M.validateStore({sessions:[workout]}),[]);
+ assert.equal(Object.hasOwn(action,'bpmMin'),false);
+ assert.equal(Object.hasOwn(action,'bpmMax'),false);
+ let restored=M.normalizeImport({schemaVersion:1,sessions:[workout]});
+ let roundtrip=restored.sessions[0].sets[0].actions[0];
+ assert.equal(roundtrip.bpmMode,'randomWalk');
+ assert.equal(roundtrip.bpmStart,80);
+ assert.equal(roundtrip.bpmFinish,120);
+ assert.equal(Object.hasOwn(roundtrip,'bpmMin'),false);
+ action.bpmStart=120;action.bpmFinish=80;
+ assert.deepEqual(M.validateStore({sessions:[workout]}),[],'Descending start and finish are valid bounds');
+ action.bpmFinish=120;
+ assert(M.validateStore({sessions:[workout]}).some(x=>x.message.includes('two different BPM')),'Zero-width random range is rejected');
+ action.bpmFinish=19;
+ assert(M.validateStore({sessions:[workout]}).some(x=>x.message.includes('20 to 300')),'Out-of-range BPM rejected');
+}
+console.log('Random progression two-value model tests: PASSED');
