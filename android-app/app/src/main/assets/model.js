@@ -16,7 +16,7 @@
     metronome: false, bpm: 120, bpmStart: 120, bpmFinish: 120, bpmMode: 'static'});
   const newSet = (name = 'Set 1') => ({id: id(), name, type: 'reps', repetitions: 3,
     sequence: 'standard', duration: range(180, 300), timeSelectionPriority: 'weights', actions: [newAction()]});
-  const newSession = (name = 'Session 1') => ({id: id(), name, sets: [newSet()]});
+  const newSession = (name = 'Session 1') => ({id: id(), name, voiceName: '', sets: [newSet()]});
   const emptyStore = () => ({schemaVersion: VERSION, sessions: []});
   const normalName = value => String(value ?? '').trim().toLocaleLowerCase();
   function uniqueName(original, siblings) {
@@ -92,7 +92,8 @@
     const store = emptyStore();
     for (const original of raw.sessions) {
       if (!original || !Array.isArray(original.sets) || original.sets.length > 100) throw new Error('Malformed session or too many sets.');
-      const session = {id: id(), name: String(original.name ?? '').slice(0, 180), sets: []};
+      const session = {id: id(), name: String(original.name ?? '').slice(0, 180),
+         voiceName: String(original.voiceName ?? '').slice(0, 180), sets: []};
       for (const entry of original.sets) {
         if (!entry || !Array.isArray(entry.actions) || entry.actions.length > 200) throw new Error('Malformed set or too many actions.');
         const set = {id: id(), name: String(entry.name ?? '').slice(0, 180),
