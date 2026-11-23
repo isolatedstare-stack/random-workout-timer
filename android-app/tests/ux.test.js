@@ -65,3 +65,17 @@ for(const field of ['action.name','action.ttsName','action.duration.min','action
 }
 assert.ok(html.includes('.settings-panel h2'));
 console.log('Beta 3.3.3 grouped configuration settings: PASSED');
+
+assert.match(src,/value="" placeholder="\$\{esc\(val\)\}"/,'Input contents remain blank with persisted value placeholders');
+assert.match(src,/class="grid range-grid"/,'Numeric ranges are paired');
+assert.match(html,/\.card-menu>\.menu-actions\{position:absolute/,'Menu overlays instead of shifting the card layout');
+assert.match(html,/\.range-grid\{display:grid;grid-template-columns:repeat\(2/,'Paired fields stay in two columns');
+assert.match(src,/addEventListener\('touchmove'/,'Swipe monitored while moving');
+assert.match(src,/detectBackSwipe\(e.touches\[0\],e\)/,'Swipe recognized before touchend');
+assert.doesNotMatch(src,/<h3>Voice announcement<\/h3>/,'Redundant voice heading removed');
+assert.match(src,/field\('Voice announcement','action.ttsName'/);
+assert.match(src,/field\('Session voice','session.voiceName'/);
+assert.match(src,/AndroidSpeech\.availableVoices/);
+assert.match(src,/AndroidSpeech\.setPreferredVoice/);
+assert.equal(UX.isBackSwipe(200,100,123,108),true,'Short deliberate swipe left triggers');
+console.log('Beta 3.3.4 UX improvements: PASSED');
