@@ -105,12 +105,11 @@
       const item = {index: items.length, setIndex, repetition, actionId: action.id,
         actionName: action.name, ttsName: action.ttsName, metronome: Boolean(action.metronome),
         bpmMode, bpm: chosenBpm, bpmStart: chosenBpm,
-        bpmFinish: bpmMode === 'progressive' ? baseFinish : chosenBpm,
+        bpmFinish: (bpmMode === 'progressive' || bpmMode === 'randomWalk') ? baseFinish : chosenBpm,
         durationMs, plannedDurationMs: nominalSeconds * 1000};
       if(action.metronome&&bpmMode==='randomWalk'){
-        item.bpmMin=action.bpmMin;
-        item.bpmMax=action.bpmMax;
-        item.bpmCurve=randomBpmCurve(baseStart,action.bpmMin,action.bpmMax,durationMs,rng);
+        item.bpmCurve=randomBpmCurve(baseStart,Math.min(baseStart,baseFinish),
+          Math.max(baseStart,baseFinish),durationMs,rng);
       }
       items.push(item);
       return item;
