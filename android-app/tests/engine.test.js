@@ -67,3 +67,42 @@ assert.equal(E.bpmAtElapsed(rampItem,59000),120);
 const downItem=E.createPlan(session([set('down','reps',[{...ramp,bpmStart:120,bpmFinish:80}],{repetitions:1})]),fixed(.5)).items[0];
 assert.equal(E.bpmAtElapsed(downItem,59000),80);
 console.log('Stage 3.2 engine tests: PASSED');
+
+// Random progression is precomputed for each occurrence. Both bounds are the
+// existing Start and Finish values; a seeded walk can change direction.
+{
+ const randomAction={...a('random-walk',24),metronome:true,bpmStart:80,bpmFinish:95,bpmMode:'randomWalk'};
+ const plan=E.createPlan(session([set('walk','reps',[randomAction],{repetitions:2})]),fixed(.2));
+ assert.equal(plan.items.length,2);
+ for(const item of plan.items){
+   assert.equal(item.bpmMode,'randomWalk');
+   assert.equal(item.bpmStart,80);
+   assert.equal(item.bpmFinish,95);
+   assert.equal(item.bpmCurve[0],80);
+   assert.deepEqual(item.bpmCurve.slice(0,3),[80,83,80]);
+   assert(item.bpmCurve.every(bpm=>bpm>=80&&bpm<=95),'Curve never crosses boundaries');
+   assert.equal(E.bpmAtElapsed(item,0),80);
+   assert.equal(E.bpmAtElapsed(item,3999),80);
+   assert.equal(E.bpmAtElapsed(item,4000),83);
+   assert.equal(E.bpmAtElapsed(item,8000),80);
+ }
+ const reverse={...randomAction,bpmStart:95,bpmFinish:80};
+ const reverseItem=E.createPlan(session([set('reverse','reps',[reverse])]),fixed(.2)).items[0];
+ assert.equal(reverseItem.bpmCurve[0],95);
+ assert(reverseItem.bpmCurve.every(bpm=>bpm>=80&&bpm<=95),'Reverse-bound curve remains safe');
+ const cut=E.createPlan(session([set('cut','time',[randomAction],{duration:{min:10,max:10}})]),fixed(.2)).items[0];
+ assert.equal(cut.durationMs,10000);
+ assert.equal(cut.plannedDurationMs,24000);
+ assert.deepEqual(cut.bpmCurve,[80,83,80]);
+ assert.equal(E.bpmAtElapsed(cut,8000),80);
+ const shorter={...randomAction,duration:{min:3,max:3}};
+ const shortItem=E.createPlan(session([set('short','reps',[shorter])]),fixed(.2)).items[0];
+ assert.deepEqual(shortItem.bpmCurve,[80],'No new step before the 4-second interval');
+ for(const [start,finish] of [[20,300],[300,20],[80,82]]) {
+   const curve=E.randomBpmCurve(start,Math.min(start,finish),Math.max(start,finish),160000,fixed(.6));
+   assert.equal(curve[0],start);
+   assert(curve.every(bpm=>bpm>=Math.min(start,finish)&&bpm<=Math.max(start,finish)));
+ }
+ assert.throws(()=>E.randomBpmCurve(100,100,100,8000,fixed(.4)),/Invalid/);
+}
+console.log('Random progression curve and runtime BPM tests: PASSED');
