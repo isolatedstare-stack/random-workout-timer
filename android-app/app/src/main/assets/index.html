@@ -61,6 +61,48 @@
 .range-grid>.field{min-width:0}
 .range-grid .field>span{font-size:.78rem}
 #app{touch-action:pan-y}
+
+/* Beta 3.3.5 - distance-readable immersive workout screen */
+body.workout-mode{background:#09121f}
+body.workout-mode main{max-width:none;width:100%;min-height:100dvh;padding:clamp(12px,2.5vw,30px);display:flex;flex-direction:column}
+body.workout-mode header{display:none}
+body.workout-mode #app{display:flex;flex:1;min-height:0}
+body.workout-mode #toast{position:fixed;left:12px;right:12px;bottom:12px;max-width:640px;margin:0 auto}
+.workout-screen{display:flex;flex-direction:column;flex:1;gap:clamp(10px,2vh,22px);width:100%;min-height:calc(100dvh - 2 * clamp(12px,2.5vw,30px));background:#09121f}
+.workout-top{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.workout-overline{text-transform:uppercase;letter-spacing:.13em;font-size:clamp(.82rem,2.2vw,1rem);color:#aec6e4;font-weight:750}
+.workout-session-name{font-size:clamp(1rem,3vw,1.5rem);font-weight:750}
+.workout-set-title{font-size:clamp(1.05rem,3.5vw,1.7rem);font-weight:750;margin-top:4px;overflow-wrap:anywhere}
+.workout-status{border:1px solid #4e6988;border-radius:99px;padding:8px 14px;font-size:clamp(.83rem,2vw,1.1rem);font-weight:750;color:#d5e6ff;white-space:nowrap}
+.workout-status.workout-paused{background:#4b3522;color:#ffe0b8}
+.workout-center{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;gap:clamp(8px,1.8vh,20px);padding:4px 0}
+.workout-action{font-size:clamp(2.8rem,12vw,7rem);font-weight:850;line-height:1.1;margin:0;max-width:1100px;overflow-wrap:anywhere}
+.workout-countdown-label{text-transform:uppercase;letter-spacing:.13em;font-weight:700;color:#aec6e4;font-size:clamp(.85rem,2.5vw,1.2rem);margin-top:6px}
+.workout-countdown{font-size:clamp(5rem,20vw,11rem);line-height:1;font-weight:850;letter-spacing:-.05em;color:#f4f9ff;font-variant-numeric:tabular-nums}
+.workout-progress{width:min(640px,90%);height:10px;border-radius:999px;overflow:hidden;background:#25344a}
+.workout-progress>div{height:100%;background:#70b2ff;border-radius:999px;transition:width .15s linear}
+.workout-bpm{font-size:clamp(1rem,3vw,1.4rem);color:#aec6e4}
+.workout-bpm strong{font-size:1.2em;color:#f4f9ff}
+.workout-secondary-timers{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:min(720px,100%);align-self:center}
+.workout-secondary-timers>div{display:flex;flex-direction:column;text-align:center;gap:6px;border:1px solid #32465f;border-radius:14px;padding:12px;background:#111f33}
+.workout-secondary-timers span{font-size:clamp(.75rem,2.1vw,.95rem);color:#afc3df;font-weight:650}
+.workout-secondary-timers strong{font-size:clamp(1.5rem,4.5vw,2.6rem);font-variant-numeric:tabular-nums}
+.workout-controls{display:grid;gap:9px;width:min(720px,100%);align-self:center;padding-bottom:env(safe-area-inset-bottom)}
+.workout-controls button{min-height:56px;font-size:clamp(1rem,2.5vw,1.3rem);border-radius:13px}
+.workout-controls .workout-primary{min-height:66px;font-size:clamp(1.2rem,3vw,1.6rem);background:#70b2ff;color:#071626}
+.workout-skip-controls{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.workout-controls .workout-stop{background:transparent;border:1px solid #845565;color:#ffbfc7;min-height:48px}
+.workout-complete-time{font-size:clamp(1.5rem,4vw,2.6rem);font-weight:700;color:#c4d8ed}
+@media(max-height:560px) and (min-width:630px){
+ .workout-screen{gap:7px}
+ .workout-center{gap:5px}
+ .workout-action{font-size:clamp(2rem,5vw,4.2rem)}
+ .workout-countdown{font-size:clamp(3.4rem,9vw,6rem)}
+ .workout-secondary-timers>div{padding:6px}
+ .workout-secondary-timers strong{font-size:1.4rem}
+ .workout-controls{display:grid;grid-template-columns:1fr 2fr auto;align-items:stretch}
+ .workout-controls .workout-primary,.workout-controls button,.workout-controls .workout-stop{min-height:50px}
+}
 </style></head><body><main>
 <header class="minimal-header"><h1>Workout sessions</h1>
 <details class="app-menu" id="appMenu"><summary aria-label="Open app menu" title="Menu">☰</summary>
