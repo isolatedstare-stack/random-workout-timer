@@ -307,6 +307,32 @@ public class MainActivity extends Activity {
                 speakNow(text, languageTag);
             });
         }
+        @JavascriptInterface public void startActionWithRandomBpm(String text, String languageTag,
+                boolean useMetronome, int bpmStart, int bpmFinish, String curveCsv,
+                long plannedDurationMs, long elapsedMs) {
+            runOnUiThread(() -> {
+                haltActionAudio();
+                if (useMetronome) {
+                    try {
+                        if (curveCsv == null || curveCsv.isEmpty() || curveCsv.length() > 110000)
+                            throw new IllegalArgumentException("Invalid BPM data.");
+                        String[] parts = curveCsv.split(",", -1);
+                        if (parts.length > 22000)
+                            throw new IllegalArgumentException("Tempo curve too long.");
+                        int[] curve = new int[parts.length];
+                        for (int i = 0; i < parts.length; i++)
+                            curve[i] = Integer.parseInt(parts[i]);
+                        metronomePlayer.startRandomWalk(bpmStart, bpmFinish, curve,
+                                plannedDurationMs, elapsedMs, (started, detail) -> {
+                            notifyWeb(started ? "metronome-started" : "metronome-error", detail);
+                        });
+                    } catch (IllegalArgumentException ex) {
+                        notifyWeb("metronome-error", "Invalid random tempo progression.");
+                    }
+                }
+                speakNow(text, languageTag);
+            });
+        }
         @JavascriptInterface public void testMetronome(int bpm) {
             runOnUiThread(() -> {
                 haltActionAudio();
