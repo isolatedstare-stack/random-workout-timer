@@ -19,6 +19,7 @@
         android:supportsRtl="true">
         <activity android:name="com.randomworkout.timer.MainActivity"
             android:exported="true"
+            android:enableOnBackInvokedCallback="true"
             android:screenOrientation="unspecified"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

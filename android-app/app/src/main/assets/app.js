@@ -225,6 +225,30 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
    else if(route.screen==='set')go('session',route.sessionId);
    else if(route.screen==='session'||route.screen==='prestart')go('home');
  }
+ // Native Back and a WebView swipe may both fire for the same physical gesture.
+ // De-duplicate them so one gesture cannot skip two configuration levels.
+ let lastGestureBackAt=0;
+ function handleGestureBack(fromNative=false){
+   const now=Date.now();
+   if(now-lastGestureBackAt<700)return;
+   lastGestureBackAt=now;
+   if(route.screen==='player'){
+     if(!runner)return;
+     if(runner.state.status==='completed')playCommand('finish-exit');
+     else playCommand('stop-session'); // Uses the existing Stop confirmation.
+     return;
+   }
+   if(route.screen==='home'){
+     if(fromNative&&confirm('Exit Random Workout Timer?')){
+       if(window.AndroidSpeech&&typeof AndroidSpeech.exitFromSessionsHome==='function')
+         AndroidSpeech.exitFromSessionsHome();
+     }
+     return;
+   }
+   goBack();
+ }
+ // System gesture events are delivered by Android, outside the WebView touch API.
+ window.onNativeBackRequested=()=>handleGestureBack(true);
  function onButton(node){const cmd=node.dataset.do,id=node.dataset.id;
  if(['pause-session','resume-session','skip-action','skip-set','stop-session','finish-exit'].includes(cmd)){playCommand(cmd);return;}
  if(cmd==='show-timers'||cmd==='hide-timers'){showTimes=cmd==='show-timers';render();return;}
@@ -284,7 +308,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
    if(UX.isBackSwipe(swipeStart.x,swipeStart.y,point.clientX,point.clientY)){
      swipeStart=null;
      if(event.cancelable)event.preventDefault();
-     goBack();
+     handleGestureBack(false);
    }
  }
  document.addEventListener('touchstart',e=>{

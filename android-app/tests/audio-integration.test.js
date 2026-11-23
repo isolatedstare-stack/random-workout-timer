@@ -55,3 +55,15 @@ assert.match(native,/View\.SYSTEM_UI_FLAG_IMMERSIVE_STICKY/);
 assert.match(native,/entry\.put\("languageTag",voice\.getLocale\(\)\.toLanguageTag\(\)\)/);
 assert.match(ui,/AndroidSpeech\.setWorkoutFullscreen\(full\)/);
 console.log('Immersive player and voice-preview bridge: PASSED');
+
+const backManifest = fs.readFileSync(path.join(base,'AndroidManifest.xml'),'utf8');
+assert.match(backManifest,/android:enableOnBackInvokedCallback="true"/);
+assert.match(native,/getOnBackInvokedDispatcher\(\)\.registerOnBackInvokedCallback/);
+assert.match(native,/OnBackInvokedDispatcher\.PRIORITY_DEFAULT/);
+assert.match(native,/Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.TIRAMISU/);
+assert.match(native,/@Override\s+public void onBackPressed\(\)/);
+assert.match(native,/window\.onNativeBackRequested && window\.onNativeBackRequested\(\)/);
+assert.match(native,/unregisterOnBackInvokedCallback\(backGestureCallback\)/);
+assert.match(native,/exitFromSessionsHome\(\)/);
+assert.doesNotMatch(native,/onBackPressed\(\)\s*\{\s*super\.onBackPressed/);
+console.log('Android native Back callback and safe exit checks: PASSED');

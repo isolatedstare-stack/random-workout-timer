@@ -97,3 +97,15 @@ assert.match(src,/document\.body\.classList\.toggle\('workout-mode',full\)/,'Ful
 assert.match(html,/\.workout-action\{font-size:clamp\(/,'Action name uses large responsive fonts');
 assert.match(html,/\.workout-countdown\{font-size:clamp\(/,'Countdown uses large responsive fonts');
 console.log('Beta 3.3.5 full-screen player, form persistence, voice preview: PASSED');
+
+// Native Back uses the same editor hierarchy without exiting immediately.
+assert.match(src,/window\.onNativeBackRequested=\(\)=>handleGestureBack\(true\)/);
+assert.match(src,/function handleGestureBack\(fromNative=false\)/);
+assert.match(src,/now-lastGestureBackAt<700/,'System Back and touch swipe are deduplicated');
+assert.match(src,/handleGestureBack\(false\)/,'Center swipes use the same Back handler');
+assert.match(src,/if\(route\.screen==='action'\)go\('set'/);
+assert.match(src,/else if\(route\.screen==='set'\)go\('session'/);
+assert.match(src,/else if\(route\.screen==='session'\|\|route\.screen==='prestart'\)go\('home'/);
+assert.match(src,/playCommand\('stop-session'\)/,'Back during workout requires Stop confirmation');
+assert.match(src,/confirm\('Exit Random Workout Timer\?'\)/,'Exiting Home requires explicit confirmation');
+console.log('Native back hierarchy and safety checks: PASSED');

@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
@@ -16,6 +17,8 @@ import android.speech.tts.Voice;
 import android.speech.tts.UtteranceProgressListener;
 import android.view.View;
 import android.view.WindowManager;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
@@ -70,6 +73,7 @@ public class MainActivity extends Activity {
     private volatile String activeUtteranceId;
     private boolean testingMetronome;
     private volatile String preferredVoiceName = "";
+    private OnBackInvokedCallback backGestureCallback;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -84,6 +88,25 @@ public class MainActivity extends Activity {
             sessionWakeLock.setReferenceCounted(false);
         }
         setupWebView();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ consumes edge-swipe Back before WebView touch handlers.
+            backGestureCallback = this::dispatchBackToWeb;
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT, backGestureCallback);
+        }
+    }
+
+    private void dispatchBackToWeb() {
+        if (webView != null) {
+            webView.evaluateJavascript(
+                    "window.onNativeBackRequested && window.onNativeBackRequested()", null);
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        // Legacy Back button/gesture dispatch (Android 12 and below).
+        dispatchBackToWeb();
     }
 
     private void setupTts() {
@@ -229,6 +252,10 @@ public class MainActivity extends Activity {
     }
 
     private class AndroidSpeechBridge {
+        @JavascriptInterface public void exitFromSessionsHome() {
+            // The WebView asks only after a confirmed Home-screen exit.
+            runOnUiThread(() -> finish());
+        }
         @JavascriptInterface public void setWorkoutFullscreen(boolean enabled) {
             runOnUiThread(() -> {
                 View decor = getWindow().getDecorView();
@@ -522,6 +549,10 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && backGestureCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backGestureCallback);
+            backGestureCallback = null;
+        }
         haltActionAudio();
         releaseSessionWakeLock();
         if (endSoundPlayer != null) { endSoundPlayer.release(); endSoundPlayer = null; }
