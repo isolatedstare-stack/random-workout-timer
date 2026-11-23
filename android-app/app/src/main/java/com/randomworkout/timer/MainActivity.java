@@ -229,6 +229,21 @@ public class MainActivity extends Activity {
     }
 
     private class AndroidSpeechBridge {
+        @JavascriptInterface public void setWorkoutFullscreen(boolean enabled) {
+            runOnUiThread(() -> {
+                View decor = getWindow().getDecorView();
+                if(enabled){
+                    decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+                }else{
+                    decor.setSystemUiVisibility(0);
+                }
+            });
+        }
         @JavascriptInterface public void setPreferredVoice(String voiceName) {
             preferredVoiceName = voiceName == null ? "" : voiceName;
         }
@@ -245,6 +260,7 @@ public class MainActivity extends Activity {
                 try{
                     entry.put("name",voice.getName());
                     entry.put("label",voice.getLocale().getDisplayName()+" — "+voice.getName());
+                    entry.put("languageTag",voice.getLocale().toLanguageTag());
                     result.put(entry);
                 }catch(Exception ignored){}
             }
