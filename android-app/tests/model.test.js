@@ -33,8 +33,9 @@ t.type='time';t.duration.min=150;t.duration.max=100;
 assert(M.validateStore(store).some(i=>i.message.includes('minimum')));
 t.duration.max=150;
 assert.equal(M.validateStore(store).length,0);
-t.actions[0].metronome=true;t.actions[0].bpm=900;
+t.actions[0].metronome=true;t.actions[0].bpmStart=900;
 assert(M.validateStore(store).some(i=>i.message.includes('BPM')));
+t.actions[0].bpmStart=120;t.actions[0].bpm=120;
 // Existing schema-v1 backups import with default weights and unchanged fixed BPM.
 const legacy=JSON.parse(JSON.stringify(store));
 for(const s of legacy.sessions)for(const t of s.sets){delete t.timeSelectionPriority;for(const a of t.actions){delete a.weight;delete a.bpmStart;delete a.bpmFinish;delete a.bpmMode;}}
@@ -43,7 +44,7 @@ assert.equal(migrated.sessions[0].sets[0].timeSelectionPriority,'weights');
 assert.equal(migrated.sessions[0].sets[0].actions[0].weight,1);
 assert.equal(migrated.sessions[0].sets[0].actions[0].bpmStart,migrated.sessions[0].sets[0].actions[0].bpmFinish);
 assert.equal(M.validateStore(migrated).length,0);
-const first=migrated.sessions[0].sets[0].actions[0];
+const first=migrated.sessions.find(s=>s.sets[0].type==='time').sets[0].actions[0];
 first.weight=0;assert(M.validateStore(migrated).some(i=>i.message.includes('weight')));
 first.weight=1.5;first.bpmStart=80;first.bpmFinish=120;first.bpmMode='progressive';
 assert.equal(M.validateStore(migrated).length,0);
