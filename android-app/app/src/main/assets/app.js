@@ -1,7 +1,7 @@
-/* Random Workout Timer Stage 3.2 — offline sessions, native audio and execution. */
+/* Random Workout Timer Beta 3.3 — streamlined configuration and gesture navigation. */
 (() => {
  'use strict';
- const M=window.RWTModel, E=window.RWTEngine, $=s=>document.querySelector(s), STORAGE='rwt-v3-sessions-v1';
+ const M=window.RWTModel, E=window.RWTEngine, UX=window.RWTUX, $=s=>document.querySelector(s), STORAGE='rwt-v3-sessions-v1';
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  let store=M.emptyStore();
  try {const saved=JSON.parse(localStorage.getItem(STORAGE)||'null'); if(saved) store=M.normalizeImport(saved);} catch(e){console.error('Session load failed',e);}
@@ -47,18 +47,18 @@
 }
 function home(){return `<section class="panel"><div class="row between wrap"><div><h2>My sessions</h2><p class="muted small">${store.sessions.length} saved session${store.sessions.length===1?'':'s'}</p></div><button data-do="new-session">+ New session</button></div>
  ${store.sessions.length?store.sessions.map(s=>{const issues=issuesFor('sessionId',s.id);return `<article class="card"><div class="row between top"><div class="flex"><div class="card-title">${esc(s.name)||'<i>Unnamed session</i>'}</div><div class="card-meta">${s.sets.length} set${s.sets.length===1?'':'s'} · ${count(s)} action${count(s)===1?'':'s'}</div></div>${statusChip(issues)}</div><div class="card-controls"><button data-do="start-setup" data-id="${s.id}" ${issues.length?'disabled title="Resolve configuration issues first"':''}>Start</button><button class="secondary" data-do="open-session" data-id="${s.id}">Configure</button><details class="card-menu"><summary>More options</summary><div class="menu-actions"><button class="secondary" data-do="copy-session" data-id="${s.id}">Duplicate</button><button class="danger" data-do="delete-session" data-id="${s.id}">Delete</button></div></details></div></article>`}).join(''):'<div class="empty">No sessions yet. Create your first session to begin.</div>'}
- </section><section class="panel"><h2>Backup & sound</h2><p class="muted small">Export your sessions to JSON or import a previous backup. Importing replaces the existing sessions after confirmation.</p><div class="actions"><button class="secondary" data-do="export">Export JSON</button><button class="secondary" data-do="import">Import JSON</button><button class="ghost" data-do="test-end">Preview ending chime</button></div><p class="hint">The completion chime is included now. It plays once after a completed session, including when the final set is skipped. Manual Stop stays silent.</p></section>`}
+ </section>`}
  function sessionPage(){const s=session();if(!s)return home();const issues=issuesFor('sessionId',s.id);return `${breadcrumbs('session')}<section class="panel"><div class="row between"><h2>Session settings</h2>${statusChip(issues)}</div>${nameField('Session name','session.name',s.name)}<p class="hint">Names must be unique across sessions.</p>${issueHTML(issues.filter(x=>!x.setId))}</section>
- <section class="panel"><div class="row between wrap"><h2>Sets <span class="tag">${s.sets.length}</span></h2><div class="actions"><button data-do="new-set-reps">+ Reps set</button><button class="secondary" data-do="new-set-time">+ Timed set</button></div></div><p class="muted small">Sets run from top to bottom. Tap Configure for details; find reordering and duplication under More options.</p>
- ${s.sets.map((t,i)=>{const localIssues=issues.filter(x=>x.setId===t.id);return `<article class="card"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(t.name)}</div><div class="card-meta">${t.type==='reps'?'Reps-based · '+t.repetitions+' repetitions':'Time-based · '+t.duration.min+'–'+t.duration.max+'s'} · ${t.actions.length} action${t.actions.length===1?'':'s'}</div></div>${statusChip(localIssues)}</div><div class="card-controls"><button data-do="open-set" data-id="${t.id}">Configure</button>${actionButtons(s.sets,i,'set',t.id,s.sets.length>1)}</div></article>`}).join('')}</section>`}
+ <section class="panel"><div class="row between wrap"><h2>Sets <span class="tag">${s.sets.length}</span></h2><div class="actions"><button data-do="new-set-reps">+ Reps set</button><button class="secondary" data-do="new-set-time">+ Timed set</button></div></div><p class="muted small">Drag ⠿ to reorder sets.</p>
+ ${'<div class="sortable-list" data-sort-group="set">'}${s.sets.map((t,i)=>{const localIssues=issues.filter(x=>x.setId===t.id);return `<article class="card sortable-card" data-sort-id="${esc(t.id)}"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(t.name)}</div><div class="card-meta">${t.type==='reps'?'Reps-based · '+t.repetitions+' repetitions':'Time-based · '+t.duration.min+'–'+t.duration.max+'s'} · ${t.actions.length} action${t.actions.length===1?'':'s'}</div></div><div class="card-side">${statusChip(localIssues)}<button type="button" class="drag-handle" data-drag-handle="set" aria-label="Drag to reorder set ${esc(t.name)}" title="Drag to reorder">⠿</button></div></div><div class="card-controls"><button data-do="open-set" data-id="${t.id}">Configure</button>${actionButtons(s.sets,i,'set',t.id,s.sets.length>1)}</div></article>`}).join('')}</div></section>`}
  function setPage(){const s=session(),t=set();if(!s||!t)return home();const issues=issuesFor('setId',t.id),group=t.actions.filter(a=>a.exclusive);return `${breadcrumbs('set')}<section class="panel"><div class="row between"><h2>Set settings</h2>${statusChip(issues)}</div>
  ${nameField('Set name','set.name',t.name)}
  ${field('Set type','set.type',t.type,'select',[['reps','Reps-based'],['time','Time-based']])}
  ${t.type==='reps'?`<div class="grid">${numberField('Repetitions','set.repetitions',t.repetitions,1,100000)}${field('Action sequence','set.sequence',t.sequence,'select',[['standard','Standard'],['random','Random']])}</div><p class="hint">One action from the mutual-exclusion group is randomly chosen per repetition. The other actions always run.</p>`:`<div class="grid">${numberField('Set duration: min seconds','set.duration.min',t.duration.min,1,86400)}${numberField('Set duration: max seconds','set.duration.max',t.duration.max,1,86400)}</div><p class="hint">Actions are selected based on their weights until the set duration is reached. The final action is shortened if needed.</p>${field('Action selection priority','set.timeSelectionPriority',t.timeSelectionPriority||'weights','select',[ ['weights','Weights first (allow repeats)'], ['avoidRepeat','Avoid consecutive repetitions first'] ])}<p class="hint">Weights first preserves selection probabilities, even when the same action repeats. Avoid repeats first chooses by weight among actions other than the previous one, where possible.</p>`}
  ${issueHTML(issues.filter(x=>!x.actionId))}</section>
- <section class="panel"><div class="row between wrap"><h2>Actions <span class="tag">${t.actions.length}</span></h2><button data-do="new-action">+ Add action</button></div><p class="muted small">Reorder actions with Up/Down. Each has its own duration, voice instruction and metronome settings.</p>
+ <section class="panel"><div class="row between wrap"><h2>Actions <span class="tag">${t.actions.length}</span></h2><button data-do="new-action">+ Add action</button></div><p class="muted small">Drag ⠿ to reorder actions.</p>
  ${t.type==='reps'&&group.length?`<div class="exclusive"><strong>Mutual-exclusion group:</strong> ${group.length} action${group.length===1?'':'s'}, total ${group.reduce((sum,a)=>sum+a.probability,0)}%. ${group.length<2?'Add a second exclusive action.':group.reduce((sum,a)=>sum+a.probability,0)!==100?'Adjust probabilities to total 100%.':'Group is valid.'}</div>`:''}
- ${t.actions.map((a,i)=>{const localIssues=issues.filter(x=>x.actionId===a.id);return `<article class="card"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(a.name)}</div><div class="card-meta">${a.duration.min}–${a.duration.max}s${a.metronome?' · '+(a.bpmStart??a.bpm)+(a.bpmMode==='progressive'?' → ':'–')+(a.bpmFinish??a.bpm)+' BPM':''}${t.type==='time'?' · Weight '+(a.weight??1):''}${t.type==='reps'&&a.exclusive?' · Exclusive '+a.probability+'%':''}</div></div>${statusChip(localIssues)}</div><div class="card-controls"><button data-do="open-action" data-id="${a.id}">Configure</button>${actionButtons(t.actions,i,'action',a.id,t.actions.length>1)}</div></article>`}).join('')}
+ ${'<div class="sortable-list" data-sort-group="action">'}${t.actions.map((a,i)=>{const localIssues=issues.filter(x=>x.actionId===a.id);return `<article class="card sortable-card" data-sort-id="${esc(a.id)}"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(a.name)}</div><div class="card-meta">${a.duration.min}–${a.duration.max}s${a.metronome?' · '+(a.bpmStart??a.bpm)+(a.bpmMode==='progressive'?' → ':'–')+(a.bpmFinish??a.bpm)+' BPM':''}${t.type==='time'?' · Weight '+(a.weight??1):''}${t.type==='reps'&&a.exclusive?' · Exclusive '+a.probability+'%':''}</div></div><div class="card-side">${statusChip(localIssues)}<button type="button" class="drag-handle" data-drag-handle="action" aria-label="Drag to reorder action ${esc(a.name)}" title="Drag to reorder">⠿</button></div></div><div class="card-controls"><button data-do="open-action" data-id="${a.id}">Configure</button>${actionButtons(t.actions,i,'action',a.id,t.actions.length>1)}</div></article>`}).join('')}</div>
  </section>`}
  function actionPage(){const s=session(),t=set(),a=action();if(!s||!t||!a)return home();const issues=issuesFor('actionId',a.id);return `${breadcrumbs('action')}
  <section class="panel"><div class="row between"><h2>Action settings</h2>${statusChip(issues)}</div>
@@ -130,13 +130,18 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  if(field==='type' && val==='time'){} // Keep reps settings for when users switch types again.
  save();
  }
+ function goBack(){
+   if(route.screen==='action')go('set',route.sessionId,route.setId);
+   else if(route.screen==='set')go('session',route.sessionId);
+   else if(route.screen==='session'||route.screen==='prestart')go('home');
+ }
  function onButton(node){const cmd=node.dataset.do,id=node.dataset.id,dir=Number(node.dataset.dir);
  if(['pause-session','resume-session','skip-action','skip-set','stop-session','finish-exit'].includes(cmd)){playCommand(cmd);return;}
  if(cmd==='show-timers'||cmd==='hide-timers'){showTimes=cmd==='show-timers';render();return;}
  if(cmd==='begin-session'){begin();return;}
  if(cmd==='start-setup'){const s=store.sessions.find(x=>x.id===id);if(!s)return;const issues=issuesFor('sessionId',s.id);if(issues.length){toast('Resolve configuration issues before starting.',true);return;}showTimes=true;go('prestart',id);return;}
  if(runner&&['running','paused'].includes(runner.state.status))return;
- if(cmd==='back'){if(route.screen==='action')go('set',route.sessionId,route.setId);else if(route.screen==='set')go('session',route.sessionId);else go('home');return;}
+ if(cmd==='back'){goBack();return;}
  if(cmd==='nav-home'){go('home');return;}
  if(cmd==='nav-session'){go('session',route.sessionId);return;}
  if(cmd==='nav-set'){go('set',route.sessionId,route.setId);return;}
@@ -160,7 +165,92 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  if(cmd==='export'){const data=JSON.stringify(store,null,2),name='random-workout-sessions-'+new Date().toISOString().slice(0,10)+'.json';if(window.AndroidSpeech&&typeof AndroidSpeech.exportConfiguration==='function'){AndroidSpeech.exportConfiguration(data,name);toast('Choose where to save your JSON backup.')}else{const url=URL.createObjectURL(new Blob([data],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}return;}
  if(cmd==='import'){if(window.AndroidSpeech&&typeof AndroidSpeech.importConfiguration==='function'){AndroidSpeech.importConfiguration();}else $('#importFile').click();return;}
  }
- $('#app').addEventListener('click',e=>{const node=e.target.closest('button[data-do]');if(node&&!node.disabled)onButton(node)});
+ document.addEventListener('click',e=>{
+   const node=e.target.closest('button[data-do]');
+   if(!node||node.disabled)return;
+   if(node.closest('#appMenu'))$('#appMenu').open=false;
+   onButton(node);
+ });
+ // Gestures only navigate between editor screens. A workout in progress never
+ // navigates away, and swipes beginning on form controls or drag handles are ignored.
+ let swipeStart=null;
+ document.addEventListener('touchstart',e=>{
+   if(e.touches.length!==1||dragState||!['session','set','action','prestart'].includes(route.screen)||
+       e.target.closest('input,textarea,select,button,summary,[data-drag-handle],.app-menu,[contenteditable]')){
+     swipeStart=null;return;
+   }
+   const p=e.touches[0];
+   swipeStart={id:p.identifier,x:p.clientX,y:p.clientY};
+ },{passive:true});
+ document.addEventListener('touchend',e=>{
+   if(!swipeStart||dragState)return;
+   const start=swipeStart;swipeStart=null;
+   const p=Array.from(e.changedTouches).find(t=>t.identifier===start.id);
+   if(p&&UX.isBackSwipe(start.x,start.y,p.clientX,p.clientY))goBack();
+ },{passive:true});
+ document.addEventListener('touchcancel',()=>{swipeStart=null;},{passive:true});
+ // Pointer Events and a dedicated drag handle work in Android WebView without
+ // depending on unreliable HTML5 drag-and-drop support on touchscreen devices.
+ let dragState=null;
+ function showDropMarker(y){
+   if(!dragState)return;
+   const cards=Array.from(dragState.list.children).filter(c=>c.classList.contains('sortable-card')&&c!==dragState.card);
+   dragState.toIndex=UX.insertionIndex(cards.map(c=>{
+     const b=c.getBoundingClientRect();return (b.top+b.bottom)/2;
+   }),y);
+   for(const c of cards)c.classList.remove('drop-before','drop-after');
+   if(!cards.length)return;
+   const target=cards[Math.min(dragState.toIndex,cards.length-1)];
+   target.classList.add(dragState.toIndex===cards.length?'drop-after':'drop-before');
+ }
+ function scrollDuringDrag(){
+   if(!dragState||!dragState.active)return;
+   const y=dragState.lastY,edge=72;
+   const speed=y<edge?-Math.min(18,(edge-y)*.25):y>innerHeight-edge?Math.min(18,(y-(innerHeight-edge))*.25):0;
+   if(speed)window.scrollBy(0,speed);
+   showDropMarker(y);
+   dragState.frame=requestAnimationFrame(scrollDuringDrag);
+ }
+ $('#app').addEventListener('pointerdown',e=>{
+   const handle=e.target.closest('[data-drag-handle]');
+   if(!handle||(e.pointerType==='mouse'&&e.button!==0)||dragState)return;
+   const card=handle.closest('.sortable-card'),list=handle.closest('.sortable-list');
+   if(!card||!list||list.querySelectorAll('.sortable-card').length<2)return;
+   dragState={handle,card,list,group:handle.dataset.dragHandle,id:card.dataset.sortId,
+     pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,lastY:e.clientY,toIndex:-1,active:false,frame:0};
+   swipeStart=null;
+   handle.setPointerCapture(e.pointerId);
+   e.preventDefault();
+ });
+ document.addEventListener('pointermove',e=>{
+   if(!dragState||e.pointerId!==dragState.pointerId)return;
+   dragState.lastY=e.clientY;
+   if(!dragState.active&&Math.hypot(e.clientX-dragState.startX,e.clientY-dragState.startY)>7){
+     dragState.active=true;
+     dragState.card.classList.add('dragging');
+     dragState.handle.setAttribute('aria-grabbed','true');
+     dragState.frame=requestAnimationFrame(scrollDuringDrag);
+   }
+   if(dragState.active)showDropMarker(e.clientY);
+ });
+ function endDrag(cancelled=false){
+   if(!dragState)return;
+   const state=dragState;dragState=null;
+   if(state.frame)cancelAnimationFrame(state.frame);
+   if(state.handle.hasPointerCapture(state.pointerId))state.handle.releasePointerCapture(state.pointerId);
+   state.card.classList.remove('dragging');
+   state.handle.removeAttribute('aria-grabbed');
+   for(const card of state.list.querySelectorAll('.sortable-card'))card.classList.remove('drop-before','drop-after');
+   if(cancelled||!state.active||state.toIndex<0)return;
+   const items=state.group==='set'?session()?.sets:set()?.actions;
+   if(items&&UX.moveById(items,state.id,state.toIndex)){
+     save();render();toast('Order updated.');
+   }
+ }
+ document.addEventListener('pointerup',e=>{if(dragState&&e.pointerId===dragState.pointerId)endDrag();});
+ document.addEventListener('pointercancel',e=>{if(dragState&&e.pointerId===dragState.pointerId)endDrag(true);});
+ document.addEventListener('contextmenu',e=>{if(e.target.closest('[data-drag-handle]'))e.preventDefault();});
+ window.addEventListener('blur',()=>endDrag(true));
  $('#app').addEventListener('input',e=>{if(e.target.matches('[data-field]'))onField(e.target)});
  $('#app').addEventListener('change',e=>{if(e.target.matches('[data-field]')){onField(e.target);render();}});
  function importText(jsonText){

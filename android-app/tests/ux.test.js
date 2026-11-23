@@ -21,3 +21,30 @@ for (const [what, mutation] of [['delete-session','store.sessions='],['delete-se
   assert.ok(line.indexOf('!confirm(')<line.indexOf(mutation),what+' confirms before mutation');
 }
 console.log('Beta 3.3 configuration UX regression tests: PASSED');
+
+const UX=require('../app/src/main/assets/ux.js');
+assert.equal(UX.isBackSwipe(250,100,130,110),true,'swipe left navigates');
+assert.equal(UX.isBackSwipe(130,100,250,100),false,'swipe right does not navigate');
+assert.equal(UX.isBackSwipe(250,100,130,250),false,'vertical scroll does not navigate');
+assert.equal(UX.isBackSwipe(250,100,195,100),false,'small touches do not navigate');
+assert.deepEqual([UX.insertionIndex([20,60,100],0),UX.insertionIndex([20,60,100],80),UX.insertionIndex([20,60,100],999)],[0,2,3]);
+const items=[{id:'a'},{id:'b'},{id:'c'},{id:'d'}];
+assert.equal(UX.moveById(items,'a',3),true);
+assert.deepEqual(items.map(x=>x.id),['b','c','d','a']);
+assert.equal(UX.moveById(items,'a',1),true);
+assert.deepEqual(items.map(x=>x.id),['b','a','c','d']);
+assert.equal(UX.moveById(items,'a',1),false);
+assert.equal(UX.moveById(items,'missing',0),false);
+assert.match(html,/id="appMenu"/);
+assert.match(html,/data-do="export"/);
+assert.match(html,/data-do="import"/);
+assert.match(html,/data-do="test-end"/);
+assert.match(html,/src="ux.js"/);
+assert.doesNotMatch(html,/Stage 3\.3 · Sessions, metronome & native voice/);
+assert.doesNotMatch(html,/Create sessions, configure sets/);
+assert.match(src,/data-drag-handle="set"/);
+assert.match(src,/data-drag-handle="action"/);
+assert.match(src,/function endDrag\(cancelled=false\)/);
+assert.match(src,/UX\.isBackSwipe/);
+assert.match(src,/UX\.moveById/);
+console.log('Beta 3.3 swipe, drag, and menu tests: PASSED');

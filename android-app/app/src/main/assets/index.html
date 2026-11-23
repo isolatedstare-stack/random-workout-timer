@@ -21,10 +21,36 @@
 .menu-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;padding:10px;background:#14223a;border:1px solid var(--border);border-radius:10px}
 .menu-actions button{font-size:.83rem}
 .card-menu>summary:focus-visible{outline:3px solid #c1deff;outline-offset:2px}
+
+/* Beta 3.3 clean navigation and touch sorting */
+.minimal-header{align-items:center;margin:0 0 16px;min-height:50px}
+.minimal-header h1{font-size:1.35rem}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.app-menu{position:relative;margin-left:auto;z-index:30}
+.app-menu>summary{list-style:none;display:flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:12px;border:1px solid #526a84;background:var(--panel2);color:var(--text);font-size:1.5rem;cursor:pointer;user-select:none}
+.app-menu>summary::-webkit-details-marker{display:none}
+.app-menu[open]>summary{background:#364a64}
+.app-menu-content{position:absolute;right:0;top:calc(100% + 8px);width:min(310px,calc(100vw - 32px));background:#1d2d45;border:1px solid #5b6f89;border-radius:13px;padding:10px;box-shadow:0 12px 35px #0009;display:grid;gap:6px}
+.app-menu-content>button{width:100%;text-align:left;min-height:45px;background:transparent;color:var(--text);font-weight:600}
+.app-menu-content>button:hover,.app-menu-content>button:focus-visible{background:#364a64}
+.app-menu-content>p{color:var(--muted);font-size:.78rem;line-height:1.45;margin:8px 6px 3px}
+.card-side{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.drag-handle{display:inline-flex;align-items:center;justify-content:center;width:44px;min-width:44px;height:44px;padding:0;border:1px solid #526a84;border-radius:9px;background:#30425d;color:#d8e6fa;font-size:1.6rem;line-height:1;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.drag-handle:active,.drag-handle[aria-grabbed=true]{cursor:grabbing;background:#4a6685}
+.sortable-card.dragging{opacity:.63;border-color:var(--blue)}
+.sortable-card.drop-before{border-top:3px solid var(--blue)}
+.sortable-card.drop-after{border-bottom:3px solid var(--blue)}
 </style></head><body><main>
-<header><div><div class="eyebrow">Random Workout Timer · Android Beta 3.3</div><h1>Workout sessions</h1><p class="muted small" style="margin:6px 0">Stage 3.3 · Sessions, metronome & native voice</p></div><span class="tag" id="saveStatus">Saved locally</span></header>
-<div class="topnote">Create sessions, configure sets, and fine-tune actions. Your settings save automatically on this device.</div>
+<header class="minimal-header"><h1>Workout sessions</h1>
+<details class="app-menu" id="appMenu"><summary aria-label="Open app menu" title="Menu">☰</summary>
+<div class="app-menu-content" role="group" aria-label="App tools">
+<button data-do="export">Export sessions (JSON)</button>
+<button data-do="import">Import sessions (JSON)</button>
+<button data-do="test-end">Preview completion chime</button>
+<p>Sessions save automatically on your device. Importing replaces the current sessions after confirmation.</p>
+</div></details></header>
+<span id="saveStatus" class="sr-only" aria-live="polite">Saved locally</span>
 <div id="app"></div><div id="toast" role="status"></div>
 <input id="importFile" type="file" accept="application/json,.json" style="display:none" aria-label="Select JSON backup">
-<p class="footer">All session data stays on your device. Export a JSON backup before uninstalling or clearing this app's storage.</p>
-</main><script src="model.js"></script><script src="engine.js"></script><script src="app.js"></script></body></html>
+
+</main><script src="model.js"></script><script src="engine.js"></script><script src="ux.js"></script><script src="app.js"></script></body></html>
