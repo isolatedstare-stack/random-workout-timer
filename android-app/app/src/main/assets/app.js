@@ -1,11 +1,12 @@
 /* Random Workout Timer Stage 1 — editor. No remote services. */
 (() => {
  'use strict';
- const M=window.RWTModel, $=s=>document.querySelector(s), STORAGE='rwt-v3-sessions-v1';
+ const M=window.RWTModel, E=window.RWTEngine, $=s=>document.querySelector(s), STORAGE='rwt-v3-sessions-v1';
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  let store=M.emptyStore();
  try {const saved=JSON.parse(localStorage.getItem(STORAGE)||'null'); if(saved) store=M.normalizeImport(saved);} catch(e){console.error('Session load failed',e);}
  let route={screen:'home',sessionId:null,setId:null,actionId:null};
+ let runner=null,showTimes=true,lastTick=0,timerHandle=null,announcedIndex=-1,completionPlayed=false;
  const session=()=>store.sessions.find(s=>s.id===route.sessionId);
  const set=()=>session()?.sets.find(s=>s.id===route.setId);
  const action=()=>set()?.actions.find(a=>a.id===route.actionId);
@@ -29,8 +30,8 @@
  <button class="secondary icon" data-do="copy-${group}" data-id="${id}">Duplicate</button>
  <button class="danger icon" data-do="delete-${group}" data-id="${id}" ${!allowDelete?'disabled title="At least one is required"':''}>Delete</button></div>`}
  function home(){return `<section class="panel"><div class="row between wrap"><div><h2>My sessions</h2><p class="muted small">${store.sessions.length} saved session${store.sessions.length===1?'':'s'}</p></div><button data-do="new-session">+ New session</button></div>
- ${store.sessions.length?store.sessions.map(s=>{const issues=issuesFor('sessionId',s.id);return `<article class="card"><div class="row between top"><div class="flex"><div class="card-title">${esc(s.name)||'<i>Unnamed session</i>'}</div><div class="card-meta">${s.sets.length} set${s.sets.length===1?'':'s'} · ${count(s)} action${count(s)===1?'':'s'}</div></div>${statusChip(issues)}</div><div class="actions"><button data-do="open-session" data-id="${s.id}">Edit session</button><button class="secondary" data-do="copy-session" data-id="${s.id}">Duplicate</button><button class="danger" data-do="delete-session" data-id="${s.id}">Delete</button></div></article>`}).join(''):'<div class="empty">No sessions yet. Create your first session to begin.</div>'}
- </section><section class="panel"><h2>Backup & sound</h2><p class="muted small">Export your sessions to JSON or import a previous backup. Importing replaces the existing sessions after confirmation.</p><div class="actions"><button class="secondary" data-do="export">Export JSON</button><button class="secondary" data-do="import">Import JSON</button><button class="ghost" data-do="test-end">Preview ending chime</button></div><p class="hint">The completion chime is included now. Automatic playback at the end of a session will be connected in Stage 2.</p></section>`}
+ ${store.sessions.length?store.sessions.map(s=>{const issues=issuesFor('sessionId',s.id);return `<article class="card"><div class="row between top"><div class="flex"><div class="card-title">${esc(s.name)||'<i>Unnamed session</i>'}</div><div class="card-meta">${s.sets.length} set${s.sets.length===1?'':'s'} · ${count(s)} action${count(s)===1?'':'s'}</div></div>${statusChip(issues)}</div><div class="actions"><button data-do="start-setup" data-id="${s.id}" ${issues.length?'disabled title="Resolve configuration issues first"':''}>Start</button><button class="secondary" data-do="open-session" data-id="${s.id}">Edit session</button><button class="secondary" data-do="copy-session" data-id="${s.id}">Duplicate</button><button class="danger" data-do="delete-session" data-id="${s.id}">Delete</button></div></article>`}).join(''):'<div class="empty">No sessions yet. Create your first session to begin.</div>'}
+ </section><section class="panel"><h2>Backup & sound</h2><p class="muted small">Export your sessions to JSON or import a previous backup. Importing replaces the existing sessions after confirmation.</p><div class="actions"><button class="secondary" data-do="export">Export JSON</button><button class="secondary" data-do="import">Import JSON</button><button class="ghost" data-do="test-end">Preview ending chime</button></div><p class="hint">The completion chime is included now. It plays once after a completed session, including when the final set is skipped. Manual Stop stays silent.</p></section>`}
  function sessionPage(){const s=session();if(!s)return home();const issues=issuesFor('sessionId',s.id);return `<div class="back"><button class="ghost" data-do="back">← All sessions</button></div><section class="panel"><div class="row between"><h2>Session settings</h2>${statusChip(issues)}</div>${nameField('Session name','session.name',s.name)}<p class="hint">Names must be unique across sessions.</p>${issueHTML(issues.filter(x=>!x.setId))}</section>
  <section class="panel"><div class="row between wrap"><h2>Sets <span class="tag">${s.sets.length}</span></h2><button data-do="new-set">+ Add set</button></div><p class="muted small">Sets execute in the order listed. Use Up/Down to reorder them.</p>
  ${s.sets.map((t,i)=>{const localIssues=issues.filter(x=>x.setId===t.id);return `<article class="card"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(t.name)}</div><div class="card-meta">${t.type==='reps'?'Reps-based · '+t.repetitions+' repetitions':'Time-based · '+t.duration.min+'–'+t.duration.max+'s'} · ${t.actions.length} action${t.actions.length===1?'':'s'}</div></div>${statusChip(localIssues)}</div><div class="actions"><button data-do="open-set" data-id="${t.id}">Edit set</button></div>${actionButtons(s.sets,i,'set',t.id,s.sets.length>1)}</article>`}).join('')}</section>`}
@@ -53,9 +54,56 @@
  ${t.type==='reps'?`<div class="exclusive"><label class="toggle"><input type="checkbox" data-field="action.exclusive" ${a.exclusive?'checked':''}><strong>Mutually exclusive</strong></label><p class="hint">When selected, this action belongs to the set's single weighted-selection group.</p>${a.exclusive?numberField('Selection probability (%)','action.probability',a.probability,0,100):''}</div>`:`<p class="hint">Mutual exclusion is available only in reps-based sets.</p>`}
  <div class="exclusive"><label class="toggle"><input type="checkbox" data-field="action.metronome" ${a.metronome?'checked':''}><strong>Enable metronome</strong></label>${a.metronome?numberField('Metronome BPM','action.bpm',a.bpm,20,300):''}<p class="hint">Metronome playback and audio ducking will be connected in Stage 3.</p></div>
  ${issueHTML(issues)}</section>`}
- function render(){let page=route.screen==='home'?home():route.screen==='session'?sessionPage():route.screen==='set'?setPage():actionPage();$('#app').innerHTML=page;$('#saveStatus').textContent='Saved locally';}
+ function fmt(ms){const sec=Math.floor(Math.max(0,ms)/1000);return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0');}
+ function prestartPage(){const s=session();if(!s)return home();return `<div class="back"><button class="ghost" data-do="back">← All sessions</button></div><section class="panel"><div class="eyebrow">Ready to start</div><h2>${esc(s.name)}</h2><p class="muted">The complete random sequence and its durations will be calculated once, before execution.</p><h3>Show timers during this session?</h3><p class="hint">Choose whether to display elapsed and total time for the session, set and action.</p><div class="actions"><button class="${showTimes?'':'secondary'}" data-do="show-timers">Show timers</button><button class="${!showTimes?'':'secondary'}" data-do="hide-timers">Hide timers</button></div><div class="actions"><button data-do="begin-session">Start session</button><button class="ghost" data-do="back">Cancel</button></div></section>`;}
+ function playerPage(){if(!runner)return home();const st=runner.state;const item=runner.current();const setInfo=item?runner.plan.sets[item.setIndex]:null;
+   if(st.status==='completed')return `<section class="panel" style="text-align:center"><div class="eyebrow">Session finished</div><h2>${esc(runner.plan.sessionName)}</h2><p>The session has ended. The completion chime plays automatically.</p>${showTimes?`<p class="muted">Elapsed ${fmt(st.elapsedMs)} · Planned ${fmt(st.effectiveTotalMs)}</p>`:''}<div class="actions" style="justify-content:center"><button data-do="finish-exit">Back to sessions</button></div></section>`;
+   const actionTotal=item.durationMs, setTotal=runner.state.setTotalMs[item.setIndex];
+   return `<section class="panel"><div class="row between"><div><div class="eyebrow">${st.status==='paused'?'Paused':'Workout running'}</div><h2>${esc(runner.plan.sessionName)}</h2></div><span class="pill">Set ${item.setIndex+1}/${runner.plan.sets.length}</span></div>
+   <p class="muted">${esc(setInfo.name)}${item.repetition?' · Repetition '+item.repetition:''}</p><div class="current-action">${esc(item.actionName)}</div>${item.metronome?'<p class="hint">Metronome playback is scheduled for Stage 3; the action timing is active now.</p>':''}
+   ${showTimes?`<div class="time-grid"><div><span class="muted small">Session elapsed / total</span><strong id="sessionClock">${fmt(st.elapsedMs)} / ${fmt(st.effectiveTotalMs)}</strong></div><div><span class="muted small">Set elapsed / total</span><strong id="setClock">${fmt(st.setPlayedMs[item.setIndex])} / ${fmt(setTotal)}</strong></div><div><span class="muted small">Action elapsed / total</span><strong id="actionClock">${fmt(st.actionElapsedMs)} / ${fmt(actionTotal)}</strong></div></div>`:''}
+   <div class="actions"><button data-do="${st.status==='paused'?'resume-session':'pause-session'}">${st.status==='paused'?'Resume':'Pause'}</button><button class="secondary" data-do="skip-action">Skip action</button><button class="secondary" data-do="skip-set">Skip set</button><button class="danger" data-do="stop-session">Stop</button></div></section>`;
+ }
+ function render(){let page=route.screen==='home'?home():route.screen==='session'?sessionPage():route.screen==='set'?setPage():route.screen==='prestart'?prestartPage():route.screen==='player'?playerPage():actionPage();$('#app').innerHTML=page;$('#saveStatus').textContent='Saved locally';}
+ function updateClocks(){if(!runner||!showTimes||route.screen!=='player')return;const item=runner.current();if(!item)return;
+   const st=runner.state;const fields=[['#sessionClock',fmt(st.elapsedMs)+' / '+fmt(st.effectiveTotalMs)],['#setClock',fmt(st.setPlayedMs[item.setIndex])+' / '+fmt(st.setTotalMs[item.setIndex])],['#actionClock',fmt(st.actionElapsedMs)+' / '+fmt(item.durationMs)]];
+   for(const [key,val] of fields){const node=$(key);if(node)node.textContent=val;}
+ }
+ function nativeStop(){if(window.AndroidSpeech){AndroidSpeech.stop();AndroidSpeech.keepScreenOn(false);}else if(window.speechSynthesis)speechSynthesis.cancel();}
+ function sayCurrent(){if(!runner||runner.state.status!=='running')return;const item=runner.current();if(!item)return;announcedIndex=runner.state.index;
+   if(window.AndroidSpeech)AndroidSpeech.speak(item.ttsName,'system');
+   else if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(item.ttsName));}
+ }
+ function finishRun(){clearInterval(timerHandle);timerHandle=null;nativeStop();if(!completionPlayed){completionPlayed=true;if(window.AndroidSpeech)AndroidSpeech.playCompletionSound();else new Audio('session_end_bong.wav').play().catch(()=>{});}render();}
+ function tick(){if(!runner||runner.state.status!=='running')return;const now=performance.now();const delta=Math.max(0,now-lastTick);lastTick=now;
+   const prior=runner.state.index;runner.consume(delta);
+   if(runner.state.status==='completed'){finishRun();return;}
+   if(runner.state.index!==prior){render();sayCurrent();}else updateClocks();
+ }
+ function begin(){const s=session();if(!s)return;const errors=M.validateStore({schemaVersion:1,sessions:[s]});if(errors.length){toast('Fix the '+errors.length+' configuration issue(s) before starting.',true);return;}
+   try{const plan=E.createPlan(s);runner=E.createRunner(plan);completionPlayed=false;announcedIndex=-1;
+     if(window.AndroidSpeech)AndroidSpeech.keepScreenOn(true);
+     go('player',s.id);lastTick=performance.now();clearInterval(timerHandle);timerHandle=setInterval(tick,150);sayCurrent();
+   }catch(e){toast('Could not plan session: '+e.message,true);}
+ }
+ function playCommand(cmd){if(!runner)return;
+   if(cmd==='finish-exit'){runner=null;go('home');return;}
+   if(cmd==='stop-session'){if(!confirm('Stop this session? The completion sound will not play.'))return;runner.stop();clearInterval(timerHandle);timerHandle=null;nativeStop();runner=null;go('home');toast('Session stopped.');return;}
+   if(cmd==='pause-session'){tick();if(runner.state.status!=='running')return;runner.pause();nativeStop();render();return;}
+   if(cmd==='resume-session'){if(runner.state.status!=='paused')return;runner.resume();lastTick=performance.now();if(window.AndroidSpeech)AndroidSpeech.keepScreenOn(true);render();sayCurrent();return;}
+   if(cmd==='skip-action'||cmd==='skip-set'){
+     if(runner.state.status==='running')tick();
+     if(runner.state.status==='completed')return;
+     const wasRunning=runner.state.status==='running';
+     runner[cmd==='skip-action'?'skipAction':'skipSet']();
+     if(runner.state.status==='completed'){finishRun();return;}
+     if(wasRunning){lastTick=performance.now();render();sayCurrent();}
+     else render();
+   }
+ }
+
  function valueTarget(path){const [entity,...fields]=path.split('.');const obj=entity==='session'?session():entity==='set'?set():action();if(!obj)return null;let parent=obj;for(let i=0;i<fields.length-1;i++)parent=parent[fields[i]];return {obj,parent,key:fields[fields.length-1],field:fields.join('.')};}
- function onField(el){const path=el.dataset.field;if(!path)return;const target=valueTarget(path);if(!target)return;
+ function onField(el){if(runner&&['running','paused'].includes(runner.state.status))return;const path=el.dataset.field;if(!path)return;const target=valueTarget(path);if(!target)return;
  const {obj,parent,key,field}=target;let val=el.type==='checkbox'?el.checked:el.type==='number'?(el.value.trim()===''?null:Number(el.value)):el.value;
  if(field==='name' && typeof val==='string' && !obj.ttsCustomized && obj.ttsName===obj.name) obj.ttsName=val;
  parent[key]=val;
@@ -64,6 +112,11 @@
  save();
  }
  function onButton(node){const cmd=node.dataset.do,id=node.dataset.id,dir=Number(node.dataset.dir);
+ if(['pause-session','resume-session','skip-action','skip-set','stop-session','finish-exit'].includes(cmd)){playCommand(cmd);return;}
+ if(cmd==='show-timers'||cmd==='hide-timers'){showTimes=cmd==='show-timers';render();return;}
+ if(cmd==='begin-session'){begin();return;}
+ if(cmd==='start-setup'){const s=store.sessions.find(x=>x.id===id);if(!s)return;const issues=issuesFor('sessionId',s.id);if(issues.length){toast('Resolve configuration issues before starting.',true);return;}showTimes=true;go('prestart',id);return;}
+ if(runner&&['running','paused'].includes(runner.state.status))return;
  if(cmd==='back'){if(route.screen==='action')go('set',route.sessionId,route.setId);else if(route.screen==='set')go('session',route.sessionId);else go('home');return;}
  if(cmd==='new-session'){const s=M.newSession(M.uniqueName('Session 1',store.sessions));store.sessions.push(s);save();go('session',s.id);return;}
  if(cmd==='new-set'){const s=session();if(!s)return;const t=M.newSet(M.uniqueName('Set '+(s.sets.length+1),s.sets));s.sets.push(t);save();go('set',s.id,t.id);return;}
@@ -80,7 +133,7 @@
  if(cmd?.startsWith('move-')){const group=cmd.slice(5),list=group==='set'?session()?.sets:set()?.actions;const i=list?.findIndex(x=>x.id===id);if(i===undefined||i<0)return;M.move(list,i,dir);save();render();return;}
  if(cmd==='restore-tts'){const a=action();if(a){a.ttsName=a.name;a.ttsCustomized=false;save();render();toast('Announcement now follows the action name.')}return;}
  if(cmd==='test-tts'){const a=action();if(!a?.ttsName.trim())return toast('Enter an announcement first.',true);if(window.AndroidSpeech){AndroidSpeech.speak(a.ttsName,'system');toast('Sending announcement to Android TTS.')}else if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(a.ttsName));}else toast('Speech preview is available in Android.',true);return;}
- if(cmd==='test-end'){if(window.AndroidSpeech&&typeof AndroidSpeech.playCompletionSound==='function'){AndroidSpeech.playCompletionSound();toast('Playing end-of-session chime.');}else{new Audio('session_end_bong.ogg').play().then(()=>toast('Playing end-of-session chime.')).catch(()=>toast('Audio preview unavailable.',true));}return;}
+ if(cmd==='test-end'){if(window.AndroidSpeech&&typeof AndroidSpeech.playCompletionSound==='function'){AndroidSpeech.playCompletionSound();toast('Playing end-of-session chime.');}else{new Audio('session_end_bong.wav').play().then(()=>toast('Playing end-of-session chime.')).catch(()=>toast('Audio preview unavailable.',true));}return;}
  if(cmd==='export'){const data=JSON.stringify(store,null,2),name='random-workout-sessions-'+new Date().toISOString().slice(0,10)+'.json';if(window.AndroidSpeech&&typeof AndroidSpeech.exportConfiguration==='function'){AndroidSpeech.exportConfiguration(data,name);toast('Choose where to save your JSON backup.')}else{const url=URL.createObjectURL(new Blob([data],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}return;}
  if(cmd==='import'){$('#importFile').click();return;}
  }

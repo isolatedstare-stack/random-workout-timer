@@ -11,7 +11,7 @@
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
-        android:label="Random Workout Builder"
+        android:label="Random Workout Timer S2"
         android:icon="@drawable/ic_timer"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.NoActionBar"
