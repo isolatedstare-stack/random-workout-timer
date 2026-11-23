@@ -225,10 +225,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void speak(String text, String languageTag) {
             runOnUiThread(() -> speakNow(text, languageTag));
         }
-        @JavascriptInterface public void startAction(String text, String languageTag, boolean useMetronome, int bpm) {
+        @JavascriptInterface public void startAction(String text, String languageTag, boolean useMetronome,
+                int bpmStart, int bpmFinish, boolean progressive, long plannedDurationMs, long elapsedMs) {
             runOnUiThread(() -> {
                 haltActionAudio();
-                if (useMetronome) metronomePlayer.start(bpm, (started, detail) -> {
+                if (useMetronome) metronomePlayer.start(bpmStart, bpmFinish, progressive,
+                        plannedDurationMs, elapsedMs, (started, detail) -> {
                     notifyWeb(started ? "metronome-started" : "metronome-error", detail);
                 });
                 speakNow(text, languageTag);

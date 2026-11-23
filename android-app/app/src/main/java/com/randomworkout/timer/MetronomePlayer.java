@@ -21,21 +21,39 @@ final class MetronomePlayer {
     private volatile int generation;
 
     synchronized boolean start(int bpm, Listener listener) {
+        return start(bpm, bpm, false, 1000L, 0L, listener);
+    }
+
+    synchronized boolean start(int bpmStart, int bpmFinish, boolean progressive,
+            long plannedDurationMs, long elapsedMs, Listener listener) {
         stop();
-        if (bpm < 20 || bpm > 300) {
-            listener.onState(false, "BPM must be between 20 and 300.");
+        if (bpmStart < 20 || bpmStart > 300 || bpmFinish < 20 || bpmFinish > 300
+                || plannedDurationMs <= 0 || elapsedMs < 0) {
+            listener.onState(false, "Invalid metronome tempo or duration.");
             return false;
         }
         int token = ++generation;
         ducked = false;
-        Thread next = new Thread(() -> runAudio(bpm, token, listener), "WorkoutMetronome");
+        Thread next = new Thread(() -> runAudio(bpmStart, bpmFinish, progressive,
+                plannedDurationMs, elapsedMs, token, listener), "WorkoutMetronome");
         next.setDaemon(true);
         worker = next;
         next.start();
         return true;
     }
 
-    private void runAudio(int bpm, int token, Listener listener) {
+    // BPM progression uses the original planned duration even if the set ends early.
+    // For a 40-BPM difference, the 40 steps are spread across 41 equal intervals.
+    private static int bpmAt(int start, int finish, boolean progressive, long durationMs, long elapsedMs) {
+        if (!progressive || start == finish) return start;
+        int steps = Math.abs(finish - start);
+        double ratio = Math.min(Math.max(0, elapsedMs), durationMs) / (double) durationMs;
+        int completed = Math.min(steps, (int) Math.floor(ratio * (steps + 1)));
+        return start + Integer.signum(finish - start) * completed;
+    }
+
+    private void runAudio(int bpmStart, int bpmFinish, boolean progressive,
+            long plannedDurationMs, long startOffsetMs, int token, Listener listener) {
         AudioTrack output = null;
         try {
             int minBytes = AudioTrack.getMinBufferSize(SAMPLE_RATE,
@@ -60,8 +78,7 @@ final class MetronomePlayer {
             track = output;
             output.setVolume(ducked ? DUCK_VOLUME : NORMAL_VOLUME);
 
-            int beatFrames = (int) Math.round(SAMPLE_RATE * 60.0 / bpm);
-            int clickFrames = Math.min(beatFrames, SAMPLE_RATE / 10);
+            int clickFrames = SAMPLE_RATE / 10;
             short[] click = new short[clickFrames];
             for (int i = 0; i < clickFrames; i++) {
                 double seconds = i / (double) SAMPLE_RATE;
@@ -74,12 +91,21 @@ final class MetronomePlayer {
             }
             short[] block = new short[2048];
             long frame = 0;
+            double framesUntilBeat = 0;
+            int clickPosition = clickFrames;
             output.play();
-            if (token == generation) listener.onState(true, "Metronome audio stream started at " + bpm + " BPM.");
+            if (token == generation) listener.onState(true, "Metronome stream started at " + bpmStart + " BPM.");
             while (token == generation && !Thread.currentThread().isInterrupted()) {
                 for (int i = 0; i < block.length; i++, frame++) {
-                    int beatPosition = (int) (frame % beatFrames);
-                    block[i] = beatPosition < clickFrames ? click[beatPosition] : 0;
+                    if (framesUntilBeat <= 0) {
+                        long elapsedMs = startOffsetMs + frame * 1000L / SAMPLE_RATE;
+                        int currentBpm = bpmAt(bpmStart, bpmFinish, progressive, plannedDurationMs, elapsedMs);
+                        framesUntilBeat += SAMPLE_RATE * 60.0 / currentBpm;
+                        clickPosition = 0;
+                    }
+                    block[i] = clickPosition < clickFrames ? click[clickPosition] : 0;
+                    if (clickPosition < clickFrames) clickPosition++;
+                    framesUntilBeat -= 1;
                 }
                 int written = output.write(block, 0, block.length, AudioTrack.WRITE_BLOCKING);
                 if (written < 0) throw new IllegalStateException("Audio write failed (" + written + ").");

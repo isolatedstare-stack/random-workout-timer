@@ -6,10 +6,10 @@ const ui = fs.readFileSync(path.join(base,'assets/app.js'),'utf-8');
 const native = fs.readFileSync(path.join(base,'java/com/randomworkout/timer/MainActivity.java'),'utf-8');
 const metro = fs.readFileSync(path.join(base,'java/com/randomworkout/timer/MetronomePlayer.java'),'utf-8');
 const manifest = fs.readFileSync(path.join(base,'AndroidManifest.xml'),'utf-8');
-assert.match(ui,/AndroidSpeech\.startAction\(item\.ttsName,'system',Boolean\(item\.metronome\),Number\(item\.bpm\)\|\|120\)/);
+assert.match(ui,/AndroidSpeech\.startAction\(item\.ttsName,'system',Boolean\(item\.metronome\),Number\(item\.bpmStart\)\|\|120/);
 assert.match(ui,/function nativeStop\(\).*AndroidSpeech\.stop\(\)/);
-assert.match(native,/void startAction\(String text, String languageTag, boolean useMetronome, int bpm\)/);
-assert.match(native,/haltActionAudio\(\);\s*if \(useMetronome\) metronomePlayer\.start\(bpm/);
+assert.match(native,/void startAction\(String text, String languageTag, boolean useMetronome,/);
+assert.match(native,/haltActionAudio\(\);\s*if \(useMetronome\) metronomePlayer\.start\(bpmStart, bpmFinish, progressive/);
 assert.match(native,/metronomePlayer\.setDucked\(true\)/);
 assert.match(native,/metronomePlayer\.setDucked\(false\)/);
 assert.match(native,/releaseSessionWakeLock\(\)/);
@@ -21,3 +21,8 @@ console.log('Stage 3 Android audio integration checks: PASSED');
 
 assert.match(ui,/data-do=\"test-metronome\"/);
 assert.match(native,/void testMetronome\(int bpm\)/);
+
+assert.match(metro,/bpmAt\(int start, int finish, boolean progressive/);
+assert.match(metro,/plannedDurationMs, elapsedMs/);
+assert.match(ui,/set\.timeSelectionPriority/);
+assert.match(ui,/action\.weight/);
