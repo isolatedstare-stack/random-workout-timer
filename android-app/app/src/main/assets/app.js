@@ -195,20 +195,28 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  // Gestures only navigate between editor screens. A workout in progress never
  // navigates away, and swipes beginning on form controls or drag handles are ignored.
  let swipeStart=null;
+ function detectBackSwipe(point,event){
+   if(!swipeStart||dragState||!point||point.identifier!==swipeStart.id)return;
+   if(UX.isBackSwipe(swipeStart.x,swipeStart.y,point.clientX,point.clientY)){
+     swipeStart=null;
+     if(event.cancelable)event.preventDefault();
+     goBack();
+   }
+ }
  document.addEventListener('touchstart',e=>{
    if(e.touches.length!==1||dragState||!['session','set','action','prestart'].includes(route.screen)||
-       e.target.closest('input,textarea,select,button,summary,[data-drag-handle],.app-menu,[contenteditable]')){
+       e.target.closest('input,textarea,select,[data-drag-handle],.app-menu,[contenteditable]')){
      swipeStart=null;return;
    }
-   const p=e.touches[0];
-   swipeStart={id:p.identifier,x:p.clientX,y:p.clientY};
+   const p=e.touches[0];swipeStart={id:p.identifier,x:p.clientX,y:p.clientY};
  },{passive:true});
+ document.addEventListener('touchmove',e=>{
+   if(swipeStart&&e.touches.length===1)detectBackSwipe(e.touches[0],e);
+ },{passive:false});
  document.addEventListener('touchend',e=>{
-   if(!swipeStart||dragState)return;
-   const start=swipeStart;swipeStart=null;
-   const p=Array.from(e.changedTouches).find(t=>t.identifier===start.id);
-   if(p&&UX.isBackSwipe(start.x,start.y,p.clientX,p.clientY))goBack();
- },{passive:true});
+   if(swipeStart)detectBackSwipe(Array.from(e.changedTouches).find(t=>t.identifier===swipeStart.id),e);
+   swipeStart=null;
+ },{passive:false});
  document.addEventListener('touchcancel',()=>{swipeStart=null;},{passive:true});
  // Pointer Events and a dedicated drag handle work in Android WebView without
  // depending on unreliable HTML5 drag-and-drop support on touchscreen devices.
