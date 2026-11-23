@@ -10,7 +10,7 @@ android {
         applicationId 'com.randomworkout.timer.stage1'
         minSdk 26
         targetSdk 35
-        versionCode 30
+        versionCode 31
         versionName '3.0-stage1'
     }
 
