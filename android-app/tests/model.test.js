@@ -50,3 +50,13 @@ first.weight=1.5;first.bpmStart=80;first.bpmFinish=120;first.bpmMode='progressiv
 assert.equal(M.validateStore(migrated).length,0);
 first.bpmFinish=900;assert(M.validateStore(migrated).some(i=>i.message.includes('BPM')));
 console.log('Stage 3.2 model tests: PASSED');
+
+{
+ const voiceSession=M.newSession('Voice persistence');
+ voiceSession.voiceName='example-offline-voice';
+ const imported=M.normalizeImport({schemaVersion:1,sessions:[voiceSession]});
+ assert.equal(imported.sessions[0].voiceName,'example-offline-voice');
+ assert.equal(M.newSession().voiceName,'','New session defaults to system voice');
+ const old=JSON.parse(JSON.stringify(voiceSession));delete old.voiceName;
+ assert.equal(M.normalizeImport({schemaVersion:1,sessions:[old]}).sessions[0].voiceName,'','Older JSON backups remain compatible');
+}
