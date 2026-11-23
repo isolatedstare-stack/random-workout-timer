@@ -109,18 +109,67 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  </section>`}
  function fmt(ms){const sec=Math.floor(Math.max(0,ms)/1000);return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0');}
  function prestartPage(){const s=session();if(!s)return home();return `<div class="back"><button class="ghost" data-do="back">← All sessions</button></div><section class="panel"><div class="eyebrow">Ready to start</div><h2>${esc(s.name)}</h2><p class="muted">The complete random sequence and its durations will be calculated once, before execution.</p><h3>Show timers during this session?</h3><p class="hint">Choose whether to display elapsed and total time for the session, set and action.</p><div class="actions"><button class="${showTimes?'':'secondary'}" data-do="show-timers">Show timers</button><button class="${!showTimes?'':'secondary'}" data-do="hide-timers">Hide timers</button></div><div class="actions"><button data-do="begin-session">Start session</button><button class="ghost" data-do="back">Cancel</button></div></section>`;}
- function playerPage(){if(!runner)return home();const st=runner.state;const item=runner.current();const setInfo=item?runner.plan.sets[item.setIndex]:null;
-   if(st.status==='completed')return `<section class="panel" style="text-align:center"><div class="eyebrow">Session finished</div><h2>${esc(runner.plan.sessionName)}</h2><p>The session has ended. The completion chime plays automatically.</p>${showTimes?`<p class="muted">Elapsed ${fmt(st.elapsedMs)} · Planned ${fmt(st.effectiveTotalMs)}</p>`:''}<div class="actions" style="justify-content:center"><button data-do="finish-exit">Back to sessions</button></div></section>`;
-   const actionTotal=item.durationMs, setTotal=runner.state.setTotalMs[item.setIndex];
-   return `<section class="panel"><div class="row between"><div><div class="eyebrow">${st.status==='paused'?'Paused':'Workout running'}</div><h2>${esc(runner.plan.sessionName)}</h2></div><span class="pill">Set ${item.setIndex+1}/${runner.plan.sets.length}</span></div>
-   <p class="muted">${esc(setInfo.name)}${item.repetition?' · Repetition '+item.repetition:''}</p><div class="current-action">${esc(item.actionName)}</div>${item.metronome?`<p class="hint">Metronome · <span id="currentBpm">${E.bpmAtElapsed(item,st.actionElapsedMs)}</span> BPM${item.bpmMode==='progressive'?' · '+item.bpmStart+' → '+item.bpmFinish+' BPM':''}. Volume lowers during speech.</p>`:''}
-   ${showTimes?`<div class="time-grid"><div><span class="muted small">Session elapsed / total</span><strong id="sessionClock">${fmt(st.elapsedMs)} / ${fmt(st.effectiveTotalMs)}</strong></div><div><span class="muted small">Set elapsed / total</span><strong id="setClock">${fmt(st.setPlayedMs[item.setIndex])} / ${fmt(setTotal)}</strong></div><div><span class="muted small">Action elapsed / total</span><strong id="actionClock">${fmt(st.actionElapsedMs)} / ${fmt(actionTotal)}</strong></div></div>`:''}
-   <div class="actions"><button data-do="${st.status==='paused'?'resume-session':'pause-session'}">${st.status==='paused'?'Resume':'Pause'}</button><button class="secondary" data-do="skip-action">Skip action</button><button class="secondary" data-do="skip-set">Skip set</button><button class="danger" data-do="stop-session">Stop</button></div></section>`;
+ function playerPage(){
+   if(!runner)return home();
+   const st=runner.state;
+   if(st.status==='completed')
+     return `<section class="workout-screen workout-finished">
+       <div class="workout-top"><span class="workout-session-name">${esc(runner.plan.sessionName)}</span><span class="workout-status">Complete</span></div>
+       <div class="workout-center"><div class="workout-overline">Workout completed</div><h2 class="workout-action">Well done!</h2>${showTimes?`<p class="workout-complete-time">Total time ${fmt(st.elapsedMs)}</p>`:''}</div>
+       <div class="workout-controls"><button class="workout-primary" data-do="finish-exit">Back to sessions</button></div>
+     </section>`;
+   const item=runner.current();
+   if(!item)return home();
+   const setInfo=runner.plan.sets[item.setIndex],setTotal=st.setTotalMs[item.setIndex];
+   const actionRemaining=Math.max(0,item.durationMs-st.actionElapsedMs);
+   const progress=item.durationMs>0?Math.max(0,Math.min(100,100*st.actionElapsedMs/item.durationMs)):0;
+   return `<section class="workout-screen">
+     <div class="workout-top">
+       <div><div class="workout-overline">${esc(runner.plan.sessionName)}</div>
+       <div class="workout-set-title">${esc(setInfo.name)}${item.repetition?' · Rep '+item.repetition:''}</div></div>
+       <span class="workout-status ${st.status==='paused'?'workout-paused':''}">${st.status==='paused'?'Paused':'Set '+(item.setIndex+1)+'/'+runner.plan.sets.length}</span>
+     </div>
+     <div class="workout-center">
+       <div class="workout-overline">Current action</div>
+       <h2 class="workout-action">${esc(item.actionName)}</h2>
+       ${showTimes?`<div class="workout-countdown-label">Time remaining</div>
+       <strong class="workout-countdown" id="actionCountdown" role="timer" aria-label="Action time remaining">${fmt(actionRemaining)}</strong>
+       <div class="workout-progress" role="progressbar" aria-label="Action progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.floor(progress)}"><div id="actionProgress" style="width:${progress}%"></div></div>`:''}
+       ${item.metronome?`<div class="workout-bpm">Metronome <strong id="currentBpm">${E.bpmAtElapsed(item,st.actionElapsedMs)}</strong> BPM</div>`:''}
+     </div>
+     ${showTimes?`<div class="workout-secondary-timers">
+       <div><span>Set remaining</span><strong id="setClock">${fmt(Math.max(0,setTotal-st.setPlayedMs[item.setIndex]))}</strong></div>
+       <div><span>Session remaining</span><strong id="sessionClock">${fmt(Math.max(0,st.effectiveTotalMs-st.elapsedMs))}</strong></div>
+     </div>`:''}
+     <div class="workout-controls">
+       <button class="workout-primary" data-do="${st.status==='paused'?'resume-session':'pause-session'}">${st.status==='paused'?'Resume':'Pause'}</button>
+       <div class="workout-skip-controls"><button class="secondary" data-do="skip-action">Skip action</button><button class="secondary" data-do="skip-set">Skip set</button></div>
+       <button class="workout-stop" data-do="stop-session">End workout</button>
+     </div>
+   </section>`;
  }
- function render(){let page=route.screen==='home'?home():route.screen==='session'?sessionPage():route.screen==='set'?setPage():route.screen==='prestart'?prestartPage():route.screen==='player'?playerPage():actionPage();$('#app').innerHTML=page;$('#saveStatus').textContent='Saved locally';}
+ let immersiveWorkout=false;
+ function render(){
+   const full=route.screen==='player';
+   document.body.classList.toggle('workout-mode',full);
+   if(immersiveWorkout!==full){
+     immersiveWorkout=full;
+     if(window.AndroidSpeech&&typeof AndroidSpeech.setWorkoutFullscreen==='function')AndroidSpeech.setWorkoutFullscreen(full);
+   }
+   const page=route.screen==='home'?home():route.screen==='session'?sessionPage():route.screen==='set'?setPage():route.screen==='prestart'?prestartPage():route.screen==='player'?playerPage():actionPage();
+   $('#app').innerHTML=page;$('#saveStatus').textContent='Saved locally';
+ }
  function updateClocks(){if(!runner||route.screen!=='player')return;const item=runner.current();if(!item)return;
    const st=runner.state;const bpmLabel=$('#currentBpm');if(bpmLabel)bpmLabel.textContent=String(E.bpmAtElapsed(item,st.actionElapsedMs));
-   if(!showTimes)return;const fields=[['#sessionClock',fmt(st.elapsedMs)+' / '+fmt(st.effectiveTotalMs)],['#setClock',fmt(st.setPlayedMs[item.setIndex])+' / '+fmt(st.setTotalMs[item.setIndex])],['#actionClock',fmt(st.actionElapsedMs)+' / '+fmt(item.durationMs)]];
+   if(!showTimes)return;
+   const remaining=Math.max(0,item.durationMs-st.actionElapsedMs);
+   const countdown=$('#actionCountdown');if(countdown)countdown.textContent=fmt(remaining);
+   const progress=$('#actionProgress');if(progress){
+     const percentage=item.durationMs?Math.max(0,Math.min(100,100*st.actionElapsedMs/item.durationMs)):0;
+     progress.style.width=percentage+'%';
+     progress.parentElement?.setAttribute('aria-valuenow',String(Math.floor(percentage)));
+   }
+   const fields=[['#sessionClock',fmt(Math.max(0,st.effectiveTotalMs-st.elapsedMs))],['#setClock',fmt(Math.max(0,st.setTotalMs[item.setIndex]-st.setPlayedMs[item.setIndex]))]];
    for(const [key,val] of fields){const node=$(key);if(node)node.textContent=val;}
  }
  function nativeStop(){if(window.AndroidSpeech){AndroidSpeech.stop();AndroidSpeech.keepScreenOn(false);}else if(window.speechSynthesis)speechSynthesis.cancel();}
