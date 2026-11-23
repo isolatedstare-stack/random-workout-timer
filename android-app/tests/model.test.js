@@ -60,3 +60,21 @@ console.log('Stage 3.2 model tests: PASSED');
  const old=JSON.parse(JSON.stringify(voiceSession));delete old.voiceName;
  assert.equal(M.normalizeImport({schemaVersion:1,sessions:[old]}).sessions[0].voiceName,'','Older JSON backups remain compatible');
 }
+
+{
+ const draft=M.newSession('');
+ const t=M.newSet('');
+ t.repetitions=null;t.duration={min:null,max:null};
+ const a=M.newAction('');a.ttsName='';a.duration={min:null,max:null};
+ a.weight=null;a.bpm=null;a.bpmStart=null;a.bpmFinish=null;
+ t.actions=[a];draft.sets=[t];
+ const reloaded=M.normalizeImport({schemaVersion:1,sessions:[draft]});
+ assert.equal(reloaded.sessions[0].name,'');
+ assert.equal(reloaded.sessions[0].sets[0].repetitions,null);
+ assert.deepEqual(reloaded.sessions[0].sets[0].duration,{min:null,max:null});
+ assert.deepEqual(reloaded.sessions[0].sets[0].actions[0].duration,{min:null,max:null});
+ assert.equal(reloaded.sessions[0].sets[0].actions[0].weight,null);
+ assert.equal(reloaded.sessions[0].sets[0].actions[0].bpmStart,null);
+ assert.equal(reloaded.sessions[0].sets[0].actions[0].bpmFinish,null);
+ assert(M.validateStore(reloaded).length>0,'Unconfigured drafts cannot start a workout');
+}
