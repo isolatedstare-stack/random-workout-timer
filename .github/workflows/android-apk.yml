@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/beta3.2-weighted-bpm, feature/beta3.3-configuration-ux]
+    branches: [main, feature/beta3.2-weighted-bpm, feature/beta3.3-configuration-ux, feature/beta3.4-random-bpm-progression]
     paths:
       - 'android-app/**'
       - '.github/workflows/android-apk.yml'
