@@ -54,3 +54,14 @@ assert.doesNotMatch(src,/cmd\?\.startsWith\('move-'\)/,'Obsolete move button han
 assert.match(src,/aria-keyshortcuts="ArrowUp ArrowDown"/,'Drag handles have keyboard support');
 assert.match(src,/addEventListener\('keydown'/,'Keyboard reorder handler installed');
 assert.match(src,/UX\.moveById\(items,id,next\)/,'Keyboard reorder uses the same saved order');
+
+assert.match(src,/<h2>Set details<\/h2>/);
+assert.match(src,/<h3>\\$\\{t.type==='reps'/);
+assert.match(src,/<h2>Basics<\/h2>/);
+assert.match(src,/<h2>Selection<\/h2>/);
+assert.match(src,/<h2>Metronome<\/h2>/);
+for(const field of ['action.name','action.ttsName','action.duration.min','action.duration.max','action.exclusive','action.probability','action.weight','action.metronome','action.bpmStart','action.bpmFinish','action.bpmMode']) {
+ assert.ok(src.includes("'"+field+"'")||src.includes('"'+field+'"'),field+' field still present');
+}
+assert.match(html,/\\.settings-panel h2/);
+console.log('Beta 3.3.3 grouped configuration settings: PASSED');
