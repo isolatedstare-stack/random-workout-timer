@@ -19,7 +19,7 @@
  function opts(options,selected){return options.map(([v,name])=>`<option value="${esc(v)}" ${String(v)===String(selected)?'selected':''}>${esc(name)}</option>`).join('')}
  function field(label,path,val,kind='text',meta=''){
   if(kind==='select')return `<label class="field"><span>${esc(label)}</span><select data-field="${path}">${opts(meta,val)}</select></label>`;
-  return `<label class="field"><span>${esc(label)}</span><input data-field="${path}" type="${kind}" value="" placeholder="${esc(val)}" ${kind==='number'?'inputmode="numeric" ':''}${meta}></label>`;
+  return `<label class="field"><span>${esc(label)}</span><input data-field="${path}" type="${kind}" value="${esc(val)}" ${kind==='number'?'inputmode="numeric" ':''}${meta}></label>`;
  }
  function nameField(label,path,val){return field(label,path,val,'text','maxlength="180" required')}
  function numberField(label,path,val,min,max){return field(label,path,val,'number',`min="${min}" max="${max}" step="1"`)}
@@ -33,6 +33,25 @@
    }
    if(selected&&!options.some(([value])=>value===selected))options.push([selected,'Unavailable on this device: '+selected]);
    return options;
+ }
+ function previewSessionVoice(){
+   const s=session();if(!s)return;
+   const voice=s.voiceName||'';
+   let language=navigator.language||'en';
+   if(window.AndroidSpeech&&typeof AndroidSpeech.availableVoices==='function'){
+     try{
+       const voices=JSON.parse(AndroidSpeech.availableVoices()||'[]');
+       const chosen=voices.find(v=>v.name===voice);
+       if(chosen?.languageTag)language=chosen.languageTag;
+     }catch(e){console.warn('Voice locale unavailable',e);}
+   }
+   const sentence=language.toLowerCase().startsWith('el')?'Αυτή είναι η φωνή της προπόνησής σου.':'This is your workout voice.';
+   if(window.AndroidSpeech&&typeof AndroidSpeech.speak==='function'){
+     if(typeof AndroidSpeech.setPreferredVoice==='function')AndroidSpeech.setPreferredVoice(voice);
+     AndroidSpeech.speak(sentence,'system');
+   }else if(window.speechSynthesis){
+     speechSynthesis.cancel();const message=new SpeechSynthesisUtterance(sentence);message.lang=language;speechSynthesis.speak(message);
+   }else toast('Voice preview requires a speech engine.',true);
  }
  function statusChip(items){return `<span class="pill ${items.length?'warn':''}">${items.length?'Needs attention · '+items.length:'Ready'}</span>`}
  function actionButtons(list,index,group,id,allowDelete=true){return `<details class="card-menu"><summary>More options</summary><div class="menu-actions">
@@ -58,7 +77,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  ${store.sessions.length?store.sessions.map(s=>{const issues=issuesFor('sessionId',s.id);return `<article class="card"><div class="row between top"><div class="flex"><div class="card-title">${esc(s.name)||'<i>Unnamed session</i>'}</div><div class="card-meta">${s.sets.length} set${s.sets.length===1?'':'s'} · ${count(s)} action${count(s)===1?'':'s'}</div></div>${statusChip(issues)}</div><div class="card-controls"><button data-do="start-setup" data-id="${s.id}" ${issues.length?'disabled title="Resolve configuration issues first"':''}>Start</button><button class="secondary" data-do="open-session" data-id="${s.id}">Configure</button><details class="card-menu"><summary>More options</summary><div class="menu-actions"><button class="secondary" data-do="copy-session" data-id="${s.id}">Duplicate</button><button class="danger" data-do="delete-session" data-id="${s.id}">Delete</button></div></details></div></article>`}).join(''):'<div class="empty">No sessions yet. Create your first session to begin.</div>'}
  </section>`}
  function sessionPage(){const s=session();if(!s)return home();const issues=issuesFor('sessionId',s.id);return `${breadcrumbs('session')}<section class="panel"><div class="row between"><h2>Session settings</h2>${statusChip(issues)}</div>${nameField('Session name','session.name',s.name)}<p class="hint">Names must be unique across sessions.</p>
- ${field('Session voice','session.voiceName',s.voiceName||'','select',voiceOptions(s.voiceName||''))}<p class="hint">Uses installed offline Android TTS voices, or your system default.</p>${issueHTML(issues.filter(x=>!x.setId))}</section>
+ ${field('Session voice','session.voiceName',s.voiceName||'','select',voiceOptions(s.voiceName||''))}<div class="actions"><button class="secondary" data-do="preview-session-voice">Play voice sample</button></div><p class="hint">Only installed offline voices are listed.</p>${issueHTML(issues.filter(x=>!x.setId))}</section>
  <section class="panel"><div class="row between wrap"><h2>Sets <span class="tag">${s.sets.length}</span></h2><div class="actions"><button data-do="new-set-reps">+ Reps set</button><button class="secondary" data-do="new-set-time">+ Timed set</button></div></div><p class="muted small">Drag ⠿ to reorder sets.</p>
  ${'<div class="sortable-list" data-sort-group="set">'}${s.sets.map((t,i)=>{const localIssues=issues.filter(x=>x.setId===t.id);return `<article class="card sortable-card" data-sort-id="${esc(t.id)}"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(t.name)}</div><div class="card-meta">${t.type==='reps'?'Reps-based · '+t.repetitions+' repetitions':'Time-based · '+t.duration.min+'–'+t.duration.max+'s'} · ${t.actions.length} action${t.actions.length===1?'':'s'}</div></div><div class="card-side">${statusChip(localIssues)}<button type="button" class="drag-handle" data-drag-handle="set" aria-label="Drag to reorder set ${esc(t.name)}" title="Drag to reorder; arrow keys also work" aria-keyshortcuts="ArrowUp ArrowDown">⠿</button></div></div><div class="card-controls"><button data-do="open-set" data-id="${t.id}">Configure</button>${actionButtons(s.sets,i,'set',t.id,s.sets.length>1)}</div></article>`}).join('')}</div></section>`}
  function setPage(){const s=session(),t=set();if(!s||!t)return home();const issues=issuesFor('setId',t.id),group=t.actions.filter(a=>a.exclusive);return `${breadcrumbs('set')}<section class="panel settings-panel"><div class="row between"><h2>Set details</h2>${statusChip(issues)}</div>
@@ -85,7 +104,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  </section>
  <section class="panel settings-panel"><h2>Metronome</h2>
  <label class="toggle"><input type="checkbox" data-field="action.metronome" ${a.metronome?'checked':''}><strong>Enable metronome</strong></label>
- ${a.metronome?`<div class="grid range-grid">${numberField('Start BPM','action.bpmStart',a.bpmStart??a.bpm,20,300)}${numberField('Finish BPM','action.bpmFinish',a.bpmFinish??a.bpm,20,300)}</div>${field('BPM behavior','action.bpmMode',a.bpmMode||'static','select',[['static','Static (random per execution)'],['progressive','Progressive (during action)']])}<p class="hint">Progressive tempo follows the original planned duration, including when the set ends early.</p><div class="actions"><button class="secondary" data-do="test-metronome">Test metronome (5s)</button></div>`:''}
+ ${a.metronome?`<div class="grid range-grid">${numberField('Start BPM','action.bpmStart',a.bpmStart===null?'':(a.bpmStart??a.bpm),20,300)}${numberField('Finish BPM','action.bpmFinish',a.bpmFinish===null?'':(a.bpmFinish??a.bpm),20,300)}</div>${field('BPM behavior','action.bpmMode',a.bpmMode||'static','select',[['static','Static (random per execution)'],['progressive','Progressive (during action)']])}<p class="hint">Progressive tempo follows the original planned duration, including when the set ends early.</p><div class="actions"><button class="secondary" data-do="test-metronome">Test metronome (5s)</button></div>`:''}
  ${issueHTML(issues)}
  </section>`}
  function fmt(ms){const sec=Math.floor(Math.max(0,ms)/1000);return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0');}
@@ -167,9 +186,24 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  if(cmd==='nav-home'){go('home');return;}
  if(cmd==='nav-session'){go('session',route.sessionId);return;}
  if(cmd==='nav-set'){go('set',route.sessionId,route.setId);return;}
- if(cmd==='new-session'){const s=M.newSession(M.uniqueName('Session 1',store.sessions));store.sessions.push(s);save();go('session',s.id);return;}
- if(cmd==='new-set'||cmd==='new-set-reps'||cmd==='new-set-time'){const s=session();if(!s)return;const t=M.newSet(M.uniqueName('Set '+(s.sets.length+1),s.sets));if(cmd==='new-set-time')t.type='time';s.sets.push(t);save();go('set',s.id,t.id);return;}
- if(cmd==='new-action'){const t=set();if(!t)return;const a=M.newAction('Action '+(t.actions.length+1));t.actions.push(a);save();go('action',route.sessionId,t.id,a.id);return;}
+ if(cmd==='new-session'){
+   const s=M.newSession('');
+   store.sessions.push(s);save();go('session',s.id);return;
+ }
+ if(cmd==='new-set'||cmd==='new-set-reps'||cmd==='new-set-time'){
+   const s=session();if(!s)return;
+   const t=M.newSet('');
+   if(cmd==='new-set-time')t.type='time';
+   t.repetitions=null;t.duration.min=null;t.duration.max=null;
+   s.sets.push(t);save();go('set',s.id,t.id);return;
+ }
+ if(cmd==='new-action'){
+   const t=set();if(!t)return;
+   const a=M.newAction('');
+   a.ttsName='';a.duration.min=null;a.duration.max=null;
+   a.weight=null;a.bpm=null;a.bpmStart=null;a.bpmFinish=null;
+   t.actions.push(a);save();go('action',route.sessionId,t.id,a.id);return;
+ }
  if(cmd==='open-session'){go('session',id);return;}
  if(cmd==='open-set'){go('set',route.sessionId,id);return;}
  if(cmd==='open-action'){go('action',route.sessionId,route.setId,id);return;}
@@ -179,7 +213,8 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  if(cmd==='delete-session'){const s=store.sessions.find(x=>x.id===id);if(!s||!confirm('Delete "'+s.name+'" and ALL its sets and actions? This cannot be undone.'))return;store.sessions=store.sessions.filter(x=>x.id!==id);save();render();toast('Session deleted.');return;}
  if(cmd==='delete-set'){const s=session(),t=s.sets.find(x=>x.id===id);if(!t)return;if(s.sets.length<=1){toast('Every session must have at least one set.',true);return;}if(!confirm('Delete set "'+t.name+'" and all its actions? This cannot be undone.'))return;s.sets=s.sets.filter(x=>x.id!==id);save();render();toast('Set deleted.');return;}
  if(cmd==='delete-action'){const t=set(),a=t.actions.find(x=>x.id===id);if(!a)return;if(t.actions.length<=1){toast('Every set must have at least one action.',true);return;}if(!confirm('Delete action "'+a.name+'"?'))return;t.actions=t.actions.filter(x=>x.id!==id);save();render();toast('Action deleted.');return;}
-  if(cmd==='restore-tts'){const a=action();if(a){a.ttsName=a.name;a.ttsCustomized=false;save();render();toast('Announcement now follows the action name.')}return;}
+  if(cmd==='preview-session-voice'){previewSessionVoice();return;}
+ if(cmd==='restore-tts'){const a=action();if(a){a.ttsName=a.name;a.ttsCustomized=false;save();render();toast('Announcement now follows the action name.')}return;}
  if(cmd==='test-metronome'){const a=action();if(!a?.metronome)return toast('Enable the metronome first.',true);if(window.AndroidSpeech&&typeof AndroidSpeech.testMetronome==='function'){AndroidSpeech.testMetronome(Number(a.bpmStart??a.bpm)||120);toast('Previewing the starting BPM for 5 seconds.');}else toast('Metronome test requires the Stage 3.1 Android app.',true);return;}
  if(cmd==='test-tts'){const a=action();if(!a?.ttsName.trim())return toast('Enter an announcement first.',true);if(window.AndroidSpeech){if(typeof AndroidSpeech.setPreferredVoice==='function')AndroidSpeech.setPreferredVoice(session()?.voiceName||'');AndroidSpeech.speak(a.ttsName,'system');toast('Sending announcement to Android TTS.')}else if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(a.ttsName));}else toast('Speech preview is available in Android.',true);return;}
  if(cmd==='test-end'){if(window.AndroidSpeech&&typeof AndroidSpeech.playCompletionSound==='function'){AndroidSpeech.playCompletionSound();toast('Playing end-of-session chime.');}else{new Audio('session_end_bong.wav').play().then(()=>toast('Playing end-of-session chime.')).catch(()=>toast('Audio preview unavailable.',true));}return;}
@@ -301,7 +336,13 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  document.addEventListener('contextmenu',e=>{if(e.target.closest('[data-drag-handle]'))e.preventDefault();});
  window.addEventListener('blur',()=>endDrag(true));
  $('#app').addEventListener('input',e=>{if(e.target.matches('[data-field]'))onField(e.target)});
- $('#app').addEventListener('change',e=>{if(e.target.matches('[data-field]')){onField(e.target);render();}});
+ $('#app').addEventListener('change',e=>{
+   if(!e.target.matches('[data-field]'))return;
+   const voiceChanged=e.target.dataset.field==='session.voiceName';
+   onField(e.target);
+   if(voiceChanged)previewSessionVoice();
+   render();
+ });
  function importText(jsonText){
   if (typeof jsonText !== 'string' || !jsonText.trim()) {
     toast('The selected backup is empty. Re-export your sessions from Stage 1, then import the new file.',true);return;
