@@ -1,4 +1,4 @@
-/* Random Workout Timer Stage 1 — editor. No remote services. */
+/* Random Workout Timer Stage 3 — offline sessions, native audio and execution. */
 (() => {
  'use strict';
  const M=window.RWTModel, E=window.RWTEngine, $=s=>document.querySelector(s), STORAGE='rwt-v3-sessions-v1';
@@ -52,7 +52,7 @@
  <p class="hint">The announcement initially follows the action name. Edit it to use a different spoken instruction.</p>
  <div class="grid">${numberField('Duration: min seconds','action.duration.min',a.duration.min,1,86400)}${numberField('Duration: max seconds','action.duration.max',a.duration.max,1,86400)}</div>
  ${t.type==='reps'?`<div class="exclusive"><label class="toggle"><input type="checkbox" data-field="action.exclusive" ${a.exclusive?'checked':''}><strong>Mutually exclusive</strong></label><p class="hint">When selected, this action belongs to the set's single weighted-selection group.</p>${a.exclusive?numberField('Selection probability (%)','action.probability',a.probability,0,100):''}</div>`:`<p class="hint">Mutual exclusion is available only in reps-based sets.</p>`}
- <div class="exclusive"><label class="toggle"><input type="checkbox" data-field="action.metronome" ${a.metronome?'checked':''}><strong>Enable metronome</strong></label>${a.metronome?numberField('Metronome BPM','action.bpm',a.bpm,20,300):''}<p class="hint">Metronome playback and audio ducking will be connected in Stage 3.</p></div>
+ <div class="exclusive"><label class="toggle"><input type="checkbox" data-field="action.metronome" ${a.metronome?'checked':''}><strong>Enable metronome</strong></label>${a.metronome?numberField('Metronome BPM','action.bpm',a.bpm,20,300):''}<p class="hint">The native metronome runs at this BPM for the whole action, including with the screen locked. Its volume is reduced while the TTS announcement plays.</p></div>
  ${issueHTML(issues)}</section>`}
  function fmt(ms){const sec=Math.floor(Math.max(0,ms)/1000);return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0');}
  function prestartPage(){const s=session();if(!s)return home();return `<div class="back"><button class="ghost" data-do="back">← All sessions</button></div><section class="panel"><div class="eyebrow">Ready to start</div><h2>${esc(s.name)}</h2><p class="muted">The complete random sequence and its durations will be calculated once, before execution.</p><h3>Show timers during this session?</h3><p class="hint">Choose whether to display elapsed and total time for the session, set and action.</p><div class="actions"><button class="${showTimes?'':'secondary'}" data-do="show-timers">Show timers</button><button class="${!showTimes?'':'secondary'}" data-do="hide-timers">Hide timers</button></div><div class="actions"><button data-do="begin-session">Start session</button><button class="ghost" data-do="back">Cancel</button></div></section>`;}
@@ -60,7 +60,7 @@
    if(st.status==='completed')return `<section class="panel" style="text-align:center"><div class="eyebrow">Session finished</div><h2>${esc(runner.plan.sessionName)}</h2><p>The session has ended. The completion chime plays automatically.</p>${showTimes?`<p class="muted">Elapsed ${fmt(st.elapsedMs)} · Planned ${fmt(st.effectiveTotalMs)}</p>`:''}<div class="actions" style="justify-content:center"><button data-do="finish-exit">Back to sessions</button></div></section>`;
    const actionTotal=item.durationMs, setTotal=runner.state.setTotalMs[item.setIndex];
    return `<section class="panel"><div class="row between"><div><div class="eyebrow">${st.status==='paused'?'Paused':'Workout running'}</div><h2>${esc(runner.plan.sessionName)}</h2></div><span class="pill">Set ${item.setIndex+1}/${runner.plan.sets.length}</span></div>
-   <p class="muted">${esc(setInfo.name)}${item.repetition?' · Repetition '+item.repetition:''}</p><div class="current-action">${esc(item.actionName)}</div>${item.metronome?'<p class="hint">Metronome playback is scheduled for Stage 3; the action timing is active now.</p>':''}
+   <p class="muted">${esc(setInfo.name)}${item.repetition?' · Repetition '+item.repetition:''}</p><div class="current-action">${esc(item.actionName)}</div>${item.metronome?`<p class="hint">Metronome active · ${item.bpm} BPM. Volume lowers during spoken instructions.</p>`:''}
    ${showTimes?`<div class="time-grid"><div><span class="muted small">Session elapsed / total</span><strong id="sessionClock">${fmt(st.elapsedMs)} / ${fmt(st.effectiveTotalMs)}</strong></div><div><span class="muted small">Set elapsed / total</span><strong id="setClock">${fmt(st.setPlayedMs[item.setIndex])} / ${fmt(setTotal)}</strong></div><div><span class="muted small">Action elapsed / total</span><strong id="actionClock">${fmt(st.actionElapsedMs)} / ${fmt(actionTotal)}</strong></div></div>`:''}
    <div class="actions"><button data-do="${st.status==='paused'?'resume-session':'pause-session'}">${st.status==='paused'?'Resume':'Pause'}</button><button class="secondary" data-do="skip-action">Skip action</button><button class="secondary" data-do="skip-set">Skip set</button><button class="danger" data-do="stop-session">Stop</button></div></section>`;
  }
@@ -71,7 +71,9 @@
  }
  function nativeStop(){if(window.AndroidSpeech){AndroidSpeech.stop();AndroidSpeech.keepScreenOn(false);}else if(window.speechSynthesis)speechSynthesis.cancel();}
  function sayCurrent(){if(!runner||runner.state.status!=='running')return;const item=runner.current();if(!item)return;announcedIndex=runner.state.index;
-   if(window.AndroidSpeech)AndroidSpeech.speak(item.ttsName,'system');
+   if(window.AndroidSpeech&&typeof AndroidSpeech.startAction==='function')
+     AndroidSpeech.startAction(item.ttsName,'system',Boolean(item.metronome),Number(item.bpm)||120);
+   else if(window.AndroidSpeech)AndroidSpeech.speak(item.ttsName,'system');
    else if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(item.ttsName));}
  }
  function finishRun(){clearInterval(timerHandle);timerHandle=null;nativeStop();if(!completionPlayed){completionPlayed=true;if(window.AndroidSpeech)AndroidSpeech.playCompletionSound();else new Audio('session_end_bong.wav').play().catch(()=>{});}render();}

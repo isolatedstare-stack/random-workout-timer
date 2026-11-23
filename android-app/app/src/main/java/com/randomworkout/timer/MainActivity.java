@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.media.MediaPlayer;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.view.View;
@@ -56,6 +57,9 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private String exportJson;
     private MediaPlayer endSoundPlayer;
+    private final MetronomePlayer metronomePlayer = new MetronomePlayer();
+    private PowerManager.WakeLock sessionWakeLock;
+    private volatile String activeUtteranceId;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -63,6 +67,12 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(Color.rgb(11, 18, 32));
         getWindow().setNavigationBarColor(Color.rgb(11, 18, 32));
         setupTts();
+        PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
+        if (power != null) {
+            sessionWakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                    "RandomWorkoutTimer:ActiveSession");
+            sessionWakeLock.setReferenceCounted(false);
+        }
         setupWebView();
     }
 
@@ -78,13 +88,35 @@ public class MainActivity extends Activity {
             tts.setPitch(1.0f);
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String utteranceId) {
-                    notifyWeb("speaking", "Android voice started");
+                    runOnUiThread(() -> {
+                        if (utteranceId.equals(activeUtteranceId)) {
+                            metronomePlayer.setDucked(true);
+                            notifyWeb("speaking", "Android voice started");
+                        }
+                    });
                 }
                 @Override public void onDone(String utteranceId) {
-                    notifyWeb("done", "Android voice completed");
+                    runOnUiThread(() -> {
+                        if (utteranceId.equals(activeUtteranceId)) {
+                            activeUtteranceId = null;
+                            metronomePlayer.setDucked(false);
+                            notifyWeb("done", "Android voice completed");
+                        }
+                    });
                 }
                 @Override public void onError(String utteranceId) {
-                    notifyWeb("error", "Android TTS could not synthesize this announcement. Try another language in Speech voice.");
+                    handleSpeechFailure(utteranceId);
+                }
+                @Override public void onError(String utteranceId, int errorCode) {
+                    handleSpeechFailure(utteranceId);
+                }
+                @Override public void onStop(String utteranceId, boolean interrupted) {
+                    runOnUiThread(() -> {
+                        if (utteranceId.equals(activeUtteranceId)) {
+                            activeUtteranceId = null;
+                            metronomePlayer.setDucked(false);
+                        }
+                    });
                 }
             });
             notifyWeb("ready", "Android native speech engine ready");
@@ -96,6 +128,16 @@ public class MainActivity extends Activity {
                 speakNow(text, language);
             }
         }));
+    }
+
+    private void handleSpeechFailure(String utteranceId) {
+        runOnUiThread(() -> {
+            if (utteranceId.equals(activeUtteranceId)) {
+                activeUtteranceId = null;
+                metronomePlayer.setDucked(false);
+                notifyWeb("error", "Android TTS could not synthesize this announcement. Try another language in Speech voice.");
+            }
+        });
     }
 
     private void setupWebView() {
@@ -180,17 +222,29 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void speak(String text, String languageTag) {
             runOnUiThread(() -> speakNow(text, languageTag));
         }
-        @JavascriptInterface public void stop() {
+        @JavascriptInterface public void startAction(String text, String languageTag, boolean useMetronome, int bpm) {
             runOnUiThread(() -> {
-                queuedText = null;
-                queuedLanguage = null;
-                if (tts != null && ttsReady) tts.stop();
+                haltActionAudio();
+                if (useMetronome && !metronomePlayer.start(bpm))
+                    notifyWeb("metronome-error", "Metronome could not start. Check the BPM (20–300) and media volume.");
+                speakNow(text, languageTag);
             });
+        }
+        @JavascriptInterface public void stop() {
+            runOnUiThread(() -> haltActionAudio());
         }
         @JavascriptInterface public void keepScreenOn(boolean enabled) {
             runOnUiThread(() -> {
-                if (enabled) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                if (enabled) {
+                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    // CPU stays awake while a workout is actively running with screen locked.
+                    // This is released on pause, stop, completion, and Activity destruction.
+                    if (sessionWakeLock != null && !sessionWakeLock.isHeld())
+                        sessionWakeLock.acquire(8L * 60L * 60L * 1000L);
+                } else {
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    releaseSessionWakeLock();
+                }
             });
         }
         @JavascriptInterface public void playCompletionSound() {
@@ -290,6 +344,18 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> webView.evaluateJavascript(script, null));
     }
 
+    private void haltActionAudio() {
+        queuedText = null;
+        queuedLanguage = null;
+        activeUtteranceId = null;
+        if (tts != null && ttsReady) tts.stop();
+        metronomePlayer.stop();
+    }
+
+    private void releaseSessionWakeLock() {
+        if (sessionWakeLock != null && sessionWakeLock.isHeld()) sessionWakeLock.release();
+    }
+
     private void speakNow(String text, String languageTag) {
         if (text == null || text.trim().isEmpty()) return;
         if (ttsFailed) {
@@ -317,9 +383,14 @@ public class MainActivity extends Activity {
                 tts.setLanguage(defaultLocale);
             }
         }
-        int result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null,
-                "exercise-" + System.nanoTime());
+        String utteranceId = "exercise-" + System.nanoTime();
+        activeUtteranceId = utteranceId;
+        // Start ducking immediately, even if the voice engine has startup latency.
+        metronomePlayer.setDucked(true);
+        int result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId);
         if (result == TextToSpeech.ERROR) {
+            activeUtteranceId = null;
+            metronomePlayer.setDucked(false);
             notifyWeb("error", "Android TTS rejected this announcement; try a different voice/language");
         }
     }
@@ -373,6 +444,8 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        haltActionAudio();
+        releaseSessionWakeLock();
         if (endSoundPlayer != null) { endSoundPlayer.release(); endSoundPlayer = null; }
         if (pendingMicRequest != null) pendingMicRequest.deny();
         if (fileCallback != null) fileCallback.onReceiveValue(null);

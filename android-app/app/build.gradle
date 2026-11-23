@@ -2,16 +2,43 @@ plugins {
     id 'com.android.application'
 }
 
+// A stable private key can be supplied by GitHub Actions using repository secrets.
+// Without it, Gradle falls back to an ephemeral debug key (testing only).
+def privateKeystorePath = System.getenv('RWT_KEYSTORE_PATH')
+def privateKeystorePassword = System.getenv('RWT_KEYSTORE_PASSWORD')
+def privateKeyAlias = System.getenv('RWT_KEY_ALIAS')
+def privateKeyPassword = System.getenv('RWT_KEY_PASSWORD')
+def hasPersistentSigning = privateKeystorePath && privateKeystorePassword && privateKeyAlias && privateKeyPassword
+if (privateKeystorePath && !hasPersistentSigning) {
+    throw new GradleException('Persistent signing key provided but signing passwords/alias are incomplete.')
+}
+
 android {
     namespace 'com.randomworkout.timer'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.randomworkout.timer.stage2'
+        applicationId 'com.randomworkout.timer.stage3'
         minSdk 26
         targetSdk 35
-        versionCode 41
-        versionName '3.0-stage2.1'
+        versionCode 50
+        versionName '3.0-stage3'
+    }
+
+    signingConfigs {
+        if (hasPersistentSigning) {
+            persistent {
+                storeFile file(privateKeystorePath)
+                storePassword privateKeystorePassword
+                keyAlias privateKeyAlias
+                keyPassword privateKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            if (hasPersistentSigning) signingConfig signingConfigs.persistent
+        }
     }
 
     compileOptions {
