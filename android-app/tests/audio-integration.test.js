@@ -67,3 +67,14 @@ assert.match(native,/unregisterOnBackInvokedCallback\(backGestureCallback\)/);
 assert.match(native,/exitFromSessionsHome\(\)/);
 assert.doesNotMatch(native,/onBackPressed\(\)\s*\{\s*super\.onBackPressed/);
 console.log('Android native Back callback and safe exit checks: PASSED');
+
+assert.match(ui,/\['randomWalk','Random progression \(up and down\)'\]/);
+assert.match(ui,/AndroidSpeech\.startActionWithRandomBpm\(/);
+assert.match(ui,/item\.bpmCurve\.join\(','\)/);
+assert.match(native,/void startActionWithRandomBpm\(String text, String languageTag/);
+assert.match(native,/metronomePlayer\.startRandomWalk\(bpmStart, bpmFinish, curve/);
+assert.match(metro,/startRandomWalk\(int bpmStart, int bpmFinish, int\[\] curve/);
+assert.match(metro,/randomBpmAt\(randomCurve, elapsedMs\)/);
+assert.match(metro,/step < min \|\| step > max/);
+assert.match(ui,/Finish BPM is the other boundary, not a required endpoint/);
+console.log('Native random BPM curve playback and limits: PASSED');
