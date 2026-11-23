@@ -30,24 +30,35 @@ jobs:
           node android-app/tests/model.test.js
           node android-app/tests/engine.test.js
           node android-app/tests/audio-integration.test.js
-      - name: Restore persistent signing key when configured
+      - name: Require and validate persistent signing key
         env:
           RWT_SIGNING_KEYSTORE_B64: ${{ secrets.RWT_SIGNING_KEYSTORE_B64 }}
+          RWT_KEYSTORE_PASSWORD: ${{ secrets.RWT_KEYSTORE_PASSWORD }}
+          RWT_KEY_ALIAS: ${{ secrets.RWT_KEY_ALIAS }}
+          RWT_KEY_PASSWORD: ${{ secrets.RWT_KEY_PASSWORD }}
         run: |
-          if [ -n "$RWT_SIGNING_KEYSTORE_B64" ]; then
-            printf '%s' "$RWT_SIGNING_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rwt-signing.jks"
-            chmod 600 "$RUNNER_TEMP/rwt-signing.jks"
-            echo "RWT_KEYSTORE_PATH=$RUNNER_TEMP/rwt-signing.jks" >> "$GITHUB_ENV"
-            echo "Persistent signing key configured."
-          else
-            echo "No persistent signing key configured; debug APK will use the runner's temporary key."
-          fi
+          for name in RWT_SIGNING_KEYSTORE_B64 RWT_KEYSTORE_PASSWORD RWT_KEY_ALIAS RWT_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required signing secret: $name"
+              exit 1
+            fi
+          done
+          printf '%s' "$RWT_SIGNING_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rwt-signing.p12"
+          chmod 600 "$RUNNER_TEMP/rwt-signing.p12"
+          keytool -list -storetype PKCS12 -keystore "$RUNNER_TEMP/rwt-signing.p12" \
+            -storepass "$RWT_KEYSTORE_PASSWORD" -alias "$RWT_KEY_ALIAS" >/dev/null
+          echo "RWT_KEYSTORE_PATH=$RUNNER_TEMP/rwt-signing.p12" >> "$GITHUB_ENV"
+          echo "Persistent signing key validated."
       - name: Compile debug APK
         env:
           RWT_KEYSTORE_PASSWORD: ${{ secrets.RWT_KEYSTORE_PASSWORD }}
           RWT_KEY_ALIAS: ${{ secrets.RWT_KEY_ALIAS }}
           RWT_KEY_PASSWORD: ${{ secrets.RWT_KEY_PASSWORD }}
         run: gradle -p android-app :app:assembleDebug --no-daemon
+      - name: Verify APK signing certificate
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+            android-app/app/build/outputs/apk/debug/app-debug.apk
       - name: Attach APK
         uses: actions/upload-artifact@v4
         with:
