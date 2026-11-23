@@ -98,20 +98,20 @@
         if (!entry || !Array.isArray(entry.actions) || entry.actions.length > 200) throw new Error('Malformed set or too many actions.');
         const set = {id: id(), name: String(entry.name ?? '').slice(0, 180),
           type: entry.type === 'time' ? 'time' : entry.type === 'reps' ? 'reps' : null,
-          repetitions: Number(entry.repetitions), sequence: entry.sequence,
-          duration: {min: Number(entry.duration?.min), max: Number(entry.duration?.max)},
+          repetitions: entry.repetitions == null ? null : Number(entry.repetitions), sequence: entry.sequence,
+          duration: {min: entry.duration?.min == null ? null : Number(entry.duration.min), max: entry.duration?.max == null ? null : Number(entry.duration.max)},
           timeSelectionPriority: entry.timeSelectionPriority ?? 'weights', actions: []};
         if (!set.type) throw new Error('Unknown set type in backup.');
         for (const a of entry.actions) {
           if (!a || typeof a !== 'object') throw new Error('Malformed action in backup.');
           set.actions.push({id: id(), name: String(a.name ?? '').slice(0,180),
             ttsName: String(a.ttsName ?? a.name ?? '').slice(0,300), ttsCustomized: Boolean(a.ttsCustomized),
-            duration: {min: Number(a.duration?.min), max: Number(a.duration?.max)},
+            duration: {min: a.duration?.min == null ? null : Number(a.duration.min), max: a.duration?.max == null ? null : Number(a.duration.max)},
             exclusive: Boolean(a.exclusive), probability: Number(a.probability),
-            weight: Number(a.weight ?? 1), metronome: Boolean(a.metronome),
-            bpm: Number(a.bpmStart ?? a.bpm ?? 120),
-            bpmStart: Number(a.bpmStart ?? a.bpm ?? 120),
-            bpmFinish: Number(a.bpmFinish ?? a.bpm ?? 120),
+            weight: a.weight === null ? null : Number(a.weight ?? 1), metronome: Boolean(a.metronome),
+            bpm: a.bpm === null ? null : Number(a.bpmStart ?? a.bpm ?? 120),
+            bpmStart: a.bpmStart === null ? null : Number(a.bpmStart ?? a.bpm ?? 120),
+            bpmFinish: a.bpmFinish === null ? null : Number(a.bpmFinish ?? a.bpm ?? 120),
             bpmMode: a.bpmMode ?? 'static'});
         }
         session.sets.push(set);
