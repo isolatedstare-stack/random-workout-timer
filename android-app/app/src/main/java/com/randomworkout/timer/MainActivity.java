@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
@@ -26,6 +27,8 @@ import androidx.webkit.WebViewAssetLoader;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Locale;
 
@@ -37,6 +40,7 @@ public class MainActivity extends Activity {
     private static final String APP_URL = "https://appassets.androidplatform.net/assets/index.html";
     private static final int REQUEST_AUDIO_PERMISSION = 501;
     private static final int REQUEST_AUDIO_FILE = 502;
+    private static final int REQUEST_JSON_EXPORT = 503;
 
     private WebView webView;
     private TextToSpeech tts;
@@ -46,6 +50,8 @@ public class MainActivity extends Activity {
     private String queuedLanguage;
     private PermissionRequest pendingMicRequest;
     private ValueCallback<Uri[]> fileCallback;
+    private String exportJson;
+    private MediaPlayer endSoundPlayer;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -183,10 +189,57 @@ public class MainActivity extends Activity {
                 else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             });
         }
+        @JavascriptInterface public void playCompletionSound() {
+            runOnUiThread(() -> playEndSound());
+        }
+        @JavascriptInterface public void exportConfiguration(String json, String fileName) {
+            runOnUiThread(() -> {
+                // Use Android's document picker so exported backups are visible outside app storage.
+                if (json == null || json.length() > 5_000_000) {
+                    notifyBackup("error", "Backup is too large to export.");
+                    return;
+                }
+                exportJson = json;
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("application/json");
+                String safeName = fileName != null && fileName.matches("[a-zA-Z0-9_.-]{1,120}") ? fileName : "random-workout-sessions.json";
+                intent.putExtra(Intent.EXTRA_TITLE, safeName);
+                try { startActivityForResult(intent, REQUEST_JSON_EXPORT); }
+                catch (Exception ex) { exportJson = null; notifyBackup("error", "Could not open the file picker."); }
+            });
+        }
         @JavascriptInterface public String status() {
             if (ttsFailed) return "failed";
             return ttsReady ? "ready" : "initializing";
         }
+    }
+
+    private void playEndSound() {
+        try {
+            if (endSoundPlayer != null) {
+                endSoundPlayer.stop();
+                endSoundPlayer.release();
+                endSoundPlayer = null;
+            }
+            endSoundPlayer = MediaPlayer.create(this, R.raw.session_end_bong);
+            if (endSoundPlayer != null) {
+                endSoundPlayer.setOnCompletionListener(player -> {
+                    player.release();
+                    if (endSoundPlayer == player) endSoundPlayer = null;
+                });
+                endSoundPlayer.start();
+            }
+        } catch (Exception ex) {
+            notifyBackup("error", "Could not play the completion chime.");
+        }
+    }
+
+    private void notifyBackup(String state, String detail) {
+        if (webView == null) return;
+        String script = "window.onNativeBackupEvent && window.onNativeBackupEvent("
+                + JSONObject.quote(state) + "," + JSONObject.quote(detail) + ");";
+        runOnUiThread(() -> webView.evaluateJavascript(script, null));
     }
 
     private void speakNow(String text, String languageTag) {
@@ -250,9 +303,23 @@ public class MainActivity extends Activity {
             fileCallback = null;
             callback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
         }
+        if (requestCode == REQUEST_JSON_EXPORT) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null && exportJson != null) {
+                try (OutputStream output = getContentResolver().openOutputStream(data.getData())) {
+                    if (output == null) throw new IllegalStateException("No writable stream");
+                    output.write(exportJson.getBytes(StandardCharsets.UTF_8));
+                    output.flush();
+                    notifyBackup("ok", "JSON backup saved successfully.");
+                } catch (Exception ex) {
+                    notifyBackup("error", "Backup could not be written: " + ex.getMessage());
+                }
+            }
+            exportJson = null;
+        }
     }
 
     @Override protected void onDestroy() {
+        if (endSoundPlayer != null) { endSoundPlayer.release(); endSoundPlayer = null; }
         if (pendingMicRequest != null) pendingMicRequest.deny();
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         if (tts != null) {

@@ -7,11 +7,11 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.randomworkout.timer'
+        applicationId 'com.randomworkout.timer.stage1'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '2.0-beta1'
+        versionCode 30
+        versionName '3.0-stage1'
     }
 
     compileOptions {
