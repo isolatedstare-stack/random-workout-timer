@@ -12,9 +12,10 @@
     : 'rwt-' + Date.now().toString(36) + '-' + (++fallbackCounter).toString(36) + '-' + Math.random().toString(36).slice(2, 9);
   const range = (min, max) => ({min, max});
   const newAction = (name = 'Action 1') => ({id: id(), name, ttsName: name, ttsCustomized: false,
-    duration: range(20, 40), exclusive: false, probability: 0, metronome: false, bpm: 120});
+    duration: range(20, 40), exclusive: false, probability: 0, weight: 1,
+    metronome: false, bpm: 120, bpmStart: 120, bpmFinish: 120, bpmMode: 'static'});
   const newSet = (name = 'Set 1') => ({id: id(), name, type: 'reps', repetitions: 3,
-    sequence: 'standard', duration: range(180, 300), actions: [newAction()]});
+    sequence: 'standard', duration: range(180, 300), timeSelectionPriority: 'weights', actions: [newAction()]});
   const newSession = (name = 'Session 1') => ({id: id(), name, sets: [newSet()]});
   const emptyStore = () => ({schemaVersion: VERSION, sessions: []});
   const normalName = value => String(value ?? '').trim().toLocaleLowerCase();
@@ -52,6 +53,8 @@
         if (setNames.has(normalName(set.name))) issues.push({...sl, message: 'Set names must be unique within the session.'});
         setNames.add(normalName(set.name));
         if (!['reps','time'].includes(set.type)) issues.push({...sl, message: 'Unknown set type.'});
+        if (set.type === 'time' && !['weights','avoidRepeat'].includes(set.timeSelectionPriority ?? 'weights'))
+          issues.push({...sl, message: 'Choose weights first or avoid repetitions first.'});
         if (set.type === 'reps') {
           if (!inRangeInteger(set.repetitions, 1, 100000)) issues.push({...sl, message: 'Repetitions must be a positive integer.'});
           if (!['standard','random'].includes(set.sequence)) issues.push({...sl, message: 'Choose standard or random action sequence.'});
@@ -68,8 +71,15 @@
           checkDuration(action.duration, al, issues);
           if (set.type === 'reps' && action.exclusive && !inRangeInteger(action.probability, 0, 100))
             issues.push({...al, message: 'Selection probability must be an integer from 0 to 100.'});
-          if (action.metronome && !inRangeInteger(action.bpm, 20, 300))
-            issues.push({...al, message: 'Metronome BPM must be 20–300.'});
+          if (set.type === 'time' && !(Number.isFinite(action.weight ?? 1) && (action.weight ?? 1) > 0 && (action.weight ?? 1) <= 1000000))
+            issues.push({...al, message: 'Action weight must be greater than 0 and at most 1,000,000.'});
+          if (action.metronome) {
+            const start = action.bpmStart ?? action.bpm, finish = action.bpmFinish ?? action.bpm;
+            if (!inRangeInteger(start, 20, 300) || !inRangeInteger(finish, 20, 300))
+              issues.push({...al, message: 'Start and finish BPM must both be integers from 20 to 300.'});
+            if (!['static','progressive'].includes(action.bpmMode ?? 'static'))
+              issues.push({...al, message: 'Choose static (random) or progressive BPM.'});
+          }
         });
       });
     });
@@ -88,7 +98,8 @@
         const set = {id: id(), name: String(entry.name ?? '').slice(0, 180),
           type: entry.type === 'time' ? 'time' : entry.type === 'reps' ? 'reps' : null,
           repetitions: Number(entry.repetitions), sequence: entry.sequence,
-          duration: {min: Number(entry.duration?.min), max: Number(entry.duration?.max)}, actions: []};
+          duration: {min: Number(entry.duration?.min), max: Number(entry.duration?.max)},
+          timeSelectionPriority: entry.timeSelectionPriority ?? 'weights', actions: []};
         if (!set.type) throw new Error('Unknown set type in backup.');
         for (const a of entry.actions) {
           if (!a || typeof a !== 'object') throw new Error('Malformed action in backup.');
@@ -96,7 +107,11 @@
             ttsName: String(a.ttsName ?? a.name ?? '').slice(0,300), ttsCustomized: Boolean(a.ttsCustomized),
             duration: {min: Number(a.duration?.min), max: Number(a.duration?.max)},
             exclusive: Boolean(a.exclusive), probability: Number(a.probability),
-            metronome: Boolean(a.metronome), bpm: Number(a.bpm)});
+            weight: Number(a.weight ?? 1), metronome: Boolean(a.metronome),
+            bpm: Number(a.bpmStart ?? a.bpm ?? 120),
+            bpmStart: Number(a.bpmStart ?? a.bpm ?? 120),
+            bpmFinish: Number(a.bpmFinish ?? a.bpm ?? 120),
+            bpmMode: a.bpmMode ?? 'static'});
         }
         session.sets.push(set);
       }

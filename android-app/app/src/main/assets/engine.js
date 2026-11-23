@@ -30,6 +30,27 @@
     }
     return group[group.length - 1]; // Floating-point boundary safety.
   }
+  function weightedActionPick(actions, rng) {
+    const total = actions.reduce((sum, a) => sum + (a.weight ?? 1), 0);
+    if (!(total > 0) || !Number.isFinite(total)) throw new Error('Invalid action weights.');
+    const value = unitRandom(rng) * total;
+    let cumulative = 0;
+    for (const action of actions) {
+      cumulative += action.weight ?? 1;
+      if (value < cumulative) return action;
+    }
+    return actions[actions.length - 1];
+  }
+  // The last BPM increment occurs one segment before the planned action ends.
+  function bpmAtElapsed(item, elapsedMs) {
+    if (item.bpmMode !== 'progressive' || item.bpmStart === item.bpmFinish) return item.bpm;
+    const difference = item.bpmFinish - item.bpmStart;
+    const steps = Math.abs(difference);
+    const duration = Math.max(1, item.plannedDurationMs);
+    const elapsed = Math.max(0, Math.min(elapsedMs, duration));
+    const completed = Math.min(steps, Math.floor(elapsed * (steps + 1) / duration));
+    return item.bpmStart + Math.sign(difference) * completed;
+  }
   function sequenceForRepetition(set, chosen, previousId, rng) {
     const eligible = set.actions.filter(a => !a.exclusive || a.id === chosen?.id);
     if (set.sequence === 'standard') {
@@ -49,14 +70,21 @@
       throw new Error('A session with at least one set is required.');
     const items = [], sets = [];
     let totalMs = 0;
-    const add = (action, setIndex, repetition, requestedSeconds) => {
+    const add = (action, setIndex, repetition, requestedSeconds, nominalSeconds = requestedSeconds) => {
       if (items.length >= MAX_OCCURRENCES) throw new Error('Session exceeds the 20,000-action planning limit. Reduce repetitions or set durations.');
       const durationMs = requestedSeconds * 1000;
       totalMs += durationMs;
       if (totalMs > MAX_SESSION_MS) throw new Error('Session exceeds the 7-day duration safety limit.');
+      const baseStart = action.bpmStart ?? action.bpm ?? 120;
+      const baseFinish = action.bpmFinish ?? action.bpm ?? 120;
+      const bpmMode = action.bpmMode === 'progressive' ? 'progressive' : 'static';
+      const chosenBpm = action.metronome && bpmMode === 'static'
+        ? between(Math.min(baseStart, baseFinish), Math.max(baseStart, baseFinish), rng) : baseStart;
       const item = {index: items.length, setIndex, repetition, actionId: action.id,
-        actionName: action.name, ttsName: action.ttsName,
-        metronome: Boolean(action.metronome), bpm: action.bpm, durationMs};
+        actionName: action.name, ttsName: action.ttsName, metronome: Boolean(action.metronome),
+        bpmMode, bpm: chosenBpm, bpmStart: chosenBpm,
+        bpmFinish: bpmMode === 'progressive' ? baseFinish : chosenBpm,
+        durationMs, plannedDurationMs: nominalSeconds * 1000};
       items.push(item);
       return item;
     };
@@ -78,11 +106,13 @@
       } else if (set.type === 'time') {
         let remainingSeconds = between(set.duration.min, set.duration.max, rng);
         while (remainingSeconds > 0) {
-          const choices = set.actions.length > 1
+          const avoidRepeat = set.timeSelectionPriority === 'avoidRepeat';
+          const choices = avoidRepeat && set.actions.length > 1
             ? set.actions.filter(a => a.id !== previousId) : set.actions;
-          const a = pick(choices.length ? choices : set.actions, rng);
-          const duration = Math.min(remainingSeconds, between(a.duration.min, a.duration.max, rng));
-          add(a, setIndex, 0, duration);
+          const a = weightedActionPick(choices.length ? choices : set.actions, rng);
+          const plannedDuration = between(a.duration.min, a.duration.max, rng);
+          const duration = Math.min(remainingSeconds, plannedDuration);
+          add(a, setIndex, 0, duration, plannedDuration);
           remainingSeconds -= duration;
           previousId = a.id;
         }
@@ -147,5 +177,5 @@
       remainingSetMs() {const item=current();return item?Math.max(0,state.setTotalMs[item.setIndex]-state.setPlayedMs[item.setIndex]):0;}
     };
   }
-  return {createPlan,createRunner,MAX_OCCURRENCES};
+  return {createPlan,createRunner,bpmAtElapsed,MAX_OCCURRENCES};
 });

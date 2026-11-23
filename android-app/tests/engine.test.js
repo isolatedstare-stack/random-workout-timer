@@ -13,7 +13,7 @@ const reordered = E.createPlan(session([set('test','reps',[a('A'),a('B')],{repet
 assert.deepEqual(reordered.items.map(x=>x.actionName),['A','B','A','B','A','B']); // B -> A is already a valid boundary
 for(let i=1;i<reordered.items.length;i++)assert.notEqual(reordered.items[i].actionId,reordered.items[i-1].actionId);
 // Time-based strict deadline and no consecutive repeats.
-const timed=E.createPlan(session([set('time','time',[a('A',5),a('B',5)],{duration:{min:12,max:12}})]),fixed(.2));
+const timed=E.createPlan(session([set('time','time',[a('A',5),a('B',5)],{duration:{min:12,max:12},timeSelectionPriority:'avoidRepeat'})]),fixed(.2));
 assert.equal(timed.totalMs,12000);
 assert.deepEqual(timed.items.map(x=>x.durationMs),[5000,5000,2000]);
 for(let i=1;i<timed.items.length;i++)assert.notEqual(timed.items[i].actionId,timed.items[i-1].actionId);
@@ -43,4 +43,27 @@ const catchUp=E.createRunner(mixed);catchUp.consume(20000);assert.equal(catchUp.
 // 20k occurrence guard ensures a malformed but otherwise range-valid input cannot hang the phone.
 assert.throws(()=>E.createPlan(session([set('huge','reps',[a('A',1)],{repetitions:20001})]),fixed(.1)),/20,000/);
 assert.deepEqual(M.validateStore({sessions:[session([set('valid','reps',[a('A')])])]}),[]);
-console.log('Stage 2 execution engine tests: PASSED');
+// Weighted time-based draws with weight priority can repeat.
+const wA={...a('W-A',4),weight:1}, wB={...a('W-B',4),weight:2}, wC={...a('W-C',4),weight:1};
+const weightsFirst=set('weighted-time','time',[wA,wB,wC],{duration:{min:16,max:16},timeSelectionPriority:'weights'});
+const wplan=E.createPlan(session([weightsFirst]),fixed(.3));
+assert.deepEqual(wplan.items.map(i=>i.actionName),['W-B','W-B','W-B','W-B']);
+assert.deepEqual(E.createPlan(session([weightsFirst]),fixed(.9)).items.map(i=>i.actionName),['W-C','W-C','W-C','W-C']);
+const avoid=set('avoid','time',[wA,wB],{duration:{min:16,max:16},timeSelectionPriority:'avoidRepeat'});
+const avoidPlan=E.createPlan(session([avoid]),fixed(.9));
+assert.deepEqual(avoidPlan.items.map(i=>i.actionName),['W-B','W-A','W-B','W-A']);
+// Static BPM is chosen once per occurrence. Progressive uses the full nominal duration.
+const staticAction={...a('static',10),metronome:true,bpmStart:80,bpmFinish:120,bpmMode:'static'};
+const staticPlan=E.createPlan(session([set('static','reps',[staticAction],{repetitions:2})]),fixed(.5));
+assert.deepEqual(staticPlan.items.map(i=>i.bpm),[100,100]);
+assert.equal(E.bpmAtElapsed(staticPlan.items[0],9000),100);
+const ramp={...a('ramp',60),metronome:true,bpmStart:80,bpmFinish:120,bpmMode:'progressive'};
+const rampItem=E.createPlan(session([set('short','time',[ramp],{duration:{min:10,max:10}})]),fixed(.5)).items[0];
+assert.equal(rampItem.durationMs,10000);
+assert.equal(rampItem.plannedDurationMs,60000);
+assert.equal(E.bpmAtElapsed(rampItem,0),80);
+assert.equal(E.bpmAtElapsed(rampItem,10000),86);
+assert.equal(E.bpmAtElapsed(rampItem,59000),120);
+const downItem=E.createPlan(session([set('down','reps',[{...ramp,bpmStart:120,bpmFinish:80}],{repetitions:1})]),fixed(.5)).items[0];
+assert.equal(E.bpmAtElapsed(downItem,59000),80);
+console.log('Stage 3.2 engine tests: PASSED');
