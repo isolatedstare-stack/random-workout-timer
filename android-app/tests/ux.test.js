@@ -66,7 +66,7 @@ for(const field of ['action.name','action.ttsName','action.duration.min','action
 assert.ok(html.includes('.settings-panel h2'));
 console.log('Beta 3.3.3 grouped configuration settings: PASSED');
 
-assert.match(src,/value="" placeholder="\$\{esc\(val\)\}"/,'Input contents remain blank with persisted value placeholders');
+assert.match(src,/value="\$\{esc\(val\)\}"/,'Existing fields retain their real saved values');
 assert.match(src,/class="grid range-grid"/,'Numeric ranges are paired');
 assert.match(html,/\.card-menu>\.menu-actions\{position:absolute/,'Menu overlays instead of shifting the card layout');
 assert.match(html,/\.range-grid\{display:grid;grid-template-columns:repeat\(2/,'Paired fields stay in two columns');
@@ -79,3 +79,21 @@ assert.match(src,/AndroidSpeech\.availableVoices/);
 assert.match(src,/AndroidSpeech\.setPreferredVoice/);
 assert.equal(UX.isBackSwipe(200,100,123,108),true,'Short deliberate swipe left triggers');
 console.log('Beta 3.3.4 UX improvements: PASSED');
+
+assert.match(src,/M\.newSession\(''\)/,'New session opens with blank name');
+assert.match(src,/M\.newSet\(''\)/,'New set opens with blank name');
+assert.match(src,/M\.newAction\(''\)/,'New action opens with blank name');
+assert.match(src,/t\.repetitions=null;t\.duration\.min=null;t\.duration\.max=null/,'New set numeric entries are empty');
+assert.match(src,/a\.weight=null;a\.bpm=null;a\.bpmStart=null;a\.bpmFinish=null/,'New action numeric entries are empty');
+assert.match(src,/data-do="preview-session-voice"/,'Voice sample playback control is available');
+assert.match(src,/if\(voiceChanged\)previewSessionVoice\(\)/,'Voice change triggers a sample');
+assert.match(src,/language\.toLowerCase\(\)\.startsWith\('el'\)/,'Greek voice preview uses Greek sample');
+assert.match(src,/class="workout-screen"/,'Player fills the workout view');
+assert.match(src,/id="actionCountdown"/,'Large countdown is displayed');
+assert.match(src,/id="actionProgress"/,'Visual action progress is displayed');
+assert.match(src,/id="sessionClock"/,'Session clock remains available');
+assert.match(src,/id="setClock"/,'Set clock remains available');
+assert.match(src,/document\.body\.classList\.toggle\('workout-mode',full\)/,'Full-screen styling is toggled');
+assert.match(html,/\.workout-action\{font-size:clamp\(/,'Action name uses large responsive fonts');
+assert.match(html,/\.workout-countdown\{font-size:clamp\(/,'Countdown uses large responsive fonts');
+console.log('Beta 3.3.5 full-screen player, form persistence, voice preview: PASSED');
