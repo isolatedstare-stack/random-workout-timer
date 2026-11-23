@@ -135,17 +135,40 @@
  if(cmd==='test-tts'){const a=action();if(!a?.ttsName.trim())return toast('Enter an announcement first.',true);if(window.AndroidSpeech){AndroidSpeech.speak(a.ttsName,'system');toast('Sending announcement to Android TTS.')}else if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(a.ttsName));}else toast('Speech preview is available in Android.',true);return;}
  if(cmd==='test-end'){if(window.AndroidSpeech&&typeof AndroidSpeech.playCompletionSound==='function'){AndroidSpeech.playCompletionSound();toast('Playing end-of-session chime.');}else{new Audio('session_end_bong.wav').play().then(()=>toast('Playing end-of-session chime.')).catch(()=>toast('Audio preview unavailable.',true));}return;}
  if(cmd==='export'){const data=JSON.stringify(store,null,2),name='random-workout-sessions-'+new Date().toISOString().slice(0,10)+'.json';if(window.AndroidSpeech&&typeof AndroidSpeech.exportConfiguration==='function'){AndroidSpeech.exportConfiguration(data,name);toast('Choose where to save your JSON backup.')}else{const url=URL.createObjectURL(new Blob([data],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}return;}
- if(cmd==='import'){$('#importFile').click();return;}
+ if(cmd==='import'){if(window.AndroidSpeech&&typeof AndroidSpeech.importConfiguration==='function'){AndroidSpeech.importConfiguration();}else $('#importFile').click();return;}
  }
  $('#app').addEventListener('click',e=>{const node=e.target.closest('button[data-do]');if(node&&!node.disabled)onButton(node)});
  $('#app').addEventListener('input',e=>{if(e.target.matches('[data-field]'))onField(e.target)});
  $('#app').addEventListener('change',e=>{if(e.target.matches('[data-field]')){onField(e.target);render();}});
- $('#importFile').addEventListener('change',async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;
-  try{if(file.size>5*1024*1024)throw new Error('Backup exceeds the 5 MB limit.');const parsed=JSON.parse(await file.text());const imported=M.normalizeImport(parsed);
-   const warnings=M.validateStore(imported);const question='Import '+imported.sessions.length+' session(s)? This will REPLACE all sessions currently saved in this app.'+(warnings.length?'\n\nNote: '+warnings.length+' configuration warning(s) will need attention.':'');
-   if(!confirm(question))return;store=imported;save();go('home');toast('Backup imported successfully.');}
-  catch(err){toast('Import failed: '+err.message,true)}
+ function importText(jsonText){
+  if (typeof jsonText !== 'string' || !jsonText.trim()) {
+    toast('The selected backup is empty. Re-export your sessions from Stage 1, then import the new file.',true);return;
+  }
+  let parsed;
+  try {parsed=JSON.parse(jsonText.replace(/^\uFEFF/,''));}
+  catch(err){toast('Backup is incomplete or invalid JSON ('+jsonText.length+' characters). Please export it again from Stage 1.',true);return;}
+  try {
+   if(!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.sessions))throw new Error('This file is not a Random Workout Timer sessions backup.');
+   const imported=M.normalizeImport(parsed);
+   const warnings=M.validateStore(imported);
+   const question='Import '+imported.sessions.length+' session(s)? This will REPLACE all sessions currently saved in this app.'+(warnings.length?'\n\nNote: '+warnings.length+' configuration warning(s) will need attention.':'');
+   if(!confirm(question))return;
+   const previous=store;
+   store=imported;
+   if(!save()){store=previous;return;}
+   go('home');toast('Backup imported successfully.');
+  }catch(err){toast('Import failed: '+err.message,true);}
+ }
+ $('#importFile').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];e.target.value='';if(!file)return;
+  if(file.size>5*1024*1024){toast('Backup exceeds the 5 MB limit.',true);return;}
+  if(file.size===0){toast('This backup is empty (0 bytes). Export a new JSON file from Stage 1.',true);return;}
+  try{const text=await file.text();importText(text);}catch(err){toast('Unable to read the backup: '+err.message,true);}
  });
+ window.onNativeJsonImport=(state,content)=>{
+  if(state==='ok')importText(content);
+  else toast(content||'Could not read the selected backup.',true);
+ };
  window.onNativeBackupEvent=(state,detail)=>toast(detail,state!=='ok');
  render();
 })();

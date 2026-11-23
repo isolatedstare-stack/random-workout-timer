@@ -27,6 +27,8 @@ import androidx.webkit.WebViewAssetLoader;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -41,6 +43,8 @@ public class MainActivity extends Activity {
     private static final int REQUEST_AUDIO_PERMISSION = 501;
     private static final int REQUEST_AUDIO_FILE = 502;
     private static final int REQUEST_JSON_EXPORT = 503;
+    private static final int REQUEST_JSON_IMPORT = 504;
+    private static final int MAX_JSON_BYTES = 5_000_000;
 
     private WebView webView;
     private TextToSpeech tts;
@@ -209,9 +213,53 @@ public class MainActivity extends Activity {
                 catch (Exception ex) { exportJson = null; notifyBackup("error", "Could not open the file picker."); }
             });
         }
+        @JavascriptInterface public void importConfiguration() {
+            runOnUiThread(() -> {
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("*/*"); // Some Android file providers mislabel JSON as octet-stream.
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                try { startActivityForResult(intent, REQUEST_JSON_IMPORT); }
+                catch (Exception ex) { notifyImport("error", "Could not open Android's document picker."); }
+            });
+        }
         @JavascriptInterface public String status() {
             if (ttsFailed) return "failed";
             return ttsReady ? "ready" : "initializing";
+        }
+    }
+
+    private void notifyImport(String state, String detail) {
+        if (webView == null) return;
+        String script = "window.onNativeJsonImport && window.onNativeJsonImport("
+                + JSONObject.quote(state) + "," + JSONObject.quote(detail) + ");";
+        runOnUiThread(() -> webView.evaluateJavascript(script, null));
+    }
+
+    private void loadImportedJson(Uri uri) {
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            if (input == null) throw new IllegalStateException("Android returned no readable content for this document.");
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                if (output.size() + count > MAX_JSON_BYTES)
+                    throw new IllegalArgumentException("Backup exceeds the 5 MB limit.");
+                output.write(buffer, 0, count);
+            }
+            if (output.size() == 0) throw new IllegalArgumentException(
+                "The selected file is empty (0 bytes). Export a fresh JSON backup from Stage 1.");
+            String raw = new String(output.toByteArray(), StandardCharsets.UTF_8);
+            if (raw.startsWith("\uFEFF")) raw = raw.substring(1);
+            if (raw.trim().isEmpty()) throw new IllegalArgumentException(
+                "The selected file contains only whitespace. Export a new backup from Stage 1.");
+            // Validate syntax here, then the JavaScript model performs schema checks and asks for confirmation.
+            try { new JSONObject(raw); }
+            catch (Exception ex) { throw new IllegalArgumentException(
+                "This JSON file appears incomplete or invalid (" + output.size() + " bytes). Please check the export."); }
+            notifyImport("ok", raw);
+        } catch (Exception ex) {
+            notifyImport("error", "Import failed: " + ex.getMessage());
         }
     }
 
@@ -302,6 +350,12 @@ public class MainActivity extends Activity {
             ValueCallback<Uri[]> callback = fileCallback;
             fileCallback = null;
             callback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+        }
+        if (requestCode == REQUEST_JSON_IMPORT) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                loadImportedJson(data.getData());
+            }
+            return;
         }
         if (requestCode == REQUEST_JSON_EXPORT) {
             if (resultCode == RESULT_OK && data != null && data.getData() != null && exportJson != null) {
