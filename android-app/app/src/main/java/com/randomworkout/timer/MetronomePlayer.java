@@ -26,16 +26,43 @@ final class MetronomePlayer {
 
     synchronized boolean start(int bpmStart, int bpmFinish, boolean progressive,
             long plannedDurationMs, long elapsedMs, Listener listener) {
+        return startInternal(bpmStart, bpmFinish, progressive, null,
+                plannedDurationMs, elapsedMs, listener);
+    }
+
+    synchronized boolean startRandomWalk(int bpmStart, int bpmFinish, int[] curve,
+            long plannedDurationMs, long elapsedMs, Listener listener) {
+        return startInternal(bpmStart, bpmFinish, false, curve,
+                plannedDurationMs, elapsedMs, listener);
+    }
+
+    private synchronized boolean startInternal(int bpmStart, int bpmFinish, boolean progressive,
+            int[] randomCurve, long plannedDurationMs, long elapsedMs, Listener listener) {
         stop();
         if (bpmStart < 20 || bpmStart > 300 || bpmFinish < 20 || bpmFinish > 300
                 || plannedDurationMs <= 0 || elapsedMs < 0) {
             listener.onState(false, "Invalid metronome tempo or duration.");
             return false;
         }
+        if(randomCurve != null) {
+            int min = Math.min(bpmStart, bpmFinish);
+            int max = Math.max(bpmStart, bpmFinish);
+            if (min == max || randomCurve.length == 0 || randomCurve[0] != bpmStart
+                    || randomCurve.length > 1 + plannedDurationMs / 4000L) {
+                listener.onState(false, "Invalid random metronome progression.");
+                return false;
+            }
+            for (int step : randomCurve) {
+                if (step < min || step > max) {
+                    listener.onState(false, "Random tempo exceeded the configured BPM bounds.");
+                    return false;
+                }
+            }
+        }
         int token = ++generation;
         ducked = false;
         Thread next = new Thread(() -> runAudio(bpmStart, bpmFinish, progressive,
-                plannedDurationMs, elapsedMs, token, listener), "WorkoutMetronome");
+                randomCurve, plannedDurationMs, elapsedMs, token, listener), "WorkoutMetronome");
         next.setDaemon(true);
         worker = next;
         next.start();
@@ -52,7 +79,12 @@ final class MetronomePlayer {
         return start + Integer.signum(finish - start) * completed;
     }
 
-    private void runAudio(int bpmStart, int bpmFinish, boolean progressive,
+    private static int randomBpmAt(int[] curve, long elapsedMs) {
+        long step = Math.max(0L, elapsedMs) / 4000L;
+        return curve[(int) Math.min(curve.length - 1L, step)];
+    }
+
+    private void runAudio(int bpmStart, int bpmFinish, boolean progressive, int[] randomCurve,
             long plannedDurationMs, long startOffsetMs, int token, Listener listener) {
         AudioTrack output = null;
         try {
@@ -99,7 +131,9 @@ final class MetronomePlayer {
                 for (int i = 0; i < block.length; i++, frame++) {
                     if (framesUntilBeat <= 0) {
                         long elapsedMs = startOffsetMs + frame * 1000L / SAMPLE_RATE;
-                        int currentBpm = bpmAt(bpmStart, bpmFinish, progressive, plannedDurationMs, elapsedMs);
+                        int currentBpm = randomCurve == null
+                                ? bpmAt(bpmStart, bpmFinish, progressive, plannedDurationMs, elapsedMs)
+                                : randomBpmAt(randomCurve, elapsedMs);
                         framesUntilBeat += SAMPLE_RATE * 60.0 / currentBpm;
                         clickPosition = 0;
                     }
