@@ -19,10 +19,21 @@
  function opts(options,selected){return options.map(([v,name])=>`<option value="${esc(v)}" ${String(v)===String(selected)?'selected':''}>${esc(name)}</option>`).join('')}
  function field(label,path,val,kind='text',meta=''){
   if(kind==='select')return `<label class="field"><span>${esc(label)}</span><select data-field="${path}">${opts(meta,val)}</select></label>`;
-  return `<label class="field"><span>${esc(label)}</span><input data-field="${path}" type="${kind}" value="${esc(val)}" ${kind==='number'?'inputmode="numeric" ':''}${meta}></label>`;
+  return `<label class="field"><span>${esc(label)}</span><input data-field="${path}" type="${kind}" value="" placeholder="${esc(val)}" ${kind==='number'?'inputmode="numeric" ':''}${meta}></label>`;
  }
  function nameField(label,path,val){return field(label,path,val,'text','maxlength="180" required')}
  function numberField(label,path,val,min,max){return field(label,path,val,'number',`min="${min}" max="${max}" step="1"`)}
+ function voiceOptions(selected){
+   const options=[['','System default']];
+   if(window.AndroidSpeech&&typeof AndroidSpeech.availableVoices==='function'){
+     try{
+       const voices=JSON.parse(AndroidSpeech.availableVoices()||'[]');
+       if(Array.isArray(voices))for(const v of voices)if(v&&typeof v.name==='string'&&v.name&&typeof v.label==='string')options.push([v.name,v.label]);
+     }catch(err){console.warn('Native voice list unavailable',err);}
+   }
+   if(selected&&!options.some(([value])=>value===selected))options.push([selected,'Unavailable on this device: '+selected]);
+   return options;
+ }
  function statusChip(items){return `<span class="pill ${items.length?'warn':''}">${items.length?'Needs attention · '+items.length:'Ready'}</span>`}
  function actionButtons(list,index,group,id,allowDelete=true){return `<details class="card-menu"><summary>More options</summary><div class="menu-actions">
  <button class="secondary icon" data-do="copy-${group}" data-id="${id}">Duplicate</button>
@@ -46,7 +57,8 @@
 function home(){return `<section class="panel"><div class="row between wrap"><div><h2>My sessions</h2><p class="muted small">${store.sessions.length} saved session${store.sessions.length===1?'':'s'}</p></div><button data-do="new-session">+ New session</button></div>
  ${store.sessions.length?store.sessions.map(s=>{const issues=issuesFor('sessionId',s.id);return `<article class="card"><div class="row between top"><div class="flex"><div class="card-title">${esc(s.name)||'<i>Unnamed session</i>'}</div><div class="card-meta">${s.sets.length} set${s.sets.length===1?'':'s'} · ${count(s)} action${count(s)===1?'':'s'}</div></div>${statusChip(issues)}</div><div class="card-controls"><button data-do="start-setup" data-id="${s.id}" ${issues.length?'disabled title="Resolve configuration issues first"':''}>Start</button><button class="secondary" data-do="open-session" data-id="${s.id}">Configure</button><details class="card-menu"><summary>More options</summary><div class="menu-actions"><button class="secondary" data-do="copy-session" data-id="${s.id}">Duplicate</button><button class="danger" data-do="delete-session" data-id="${s.id}">Delete</button></div></details></div></article>`}).join(''):'<div class="empty">No sessions yet. Create your first session to begin.</div>'}
  </section>`}
- function sessionPage(){const s=session();if(!s)return home();const issues=issuesFor('sessionId',s.id);return `${breadcrumbs('session')}<section class="panel"><div class="row between"><h2>Session settings</h2>${statusChip(issues)}</div>${nameField('Session name','session.name',s.name)}<p class="hint">Names must be unique across sessions.</p>${issueHTML(issues.filter(x=>!x.setId))}</section>
+ function sessionPage(){const s=session();if(!s)return home();const issues=issuesFor('sessionId',s.id);return `${breadcrumbs('session')}<section class="panel"><div class="row between"><h2>Session settings</h2>${statusChip(issues)}</div>${nameField('Session name','session.name',s.name)}<p class="hint">Names must be unique across sessions.</p>
+ ${field('Session voice','session.voiceName',s.voiceName||'','select',voiceOptions(s.voiceName||''))}<p class="hint">Uses installed offline Android TTS voices, or your system default.</p>${issueHTML(issues.filter(x=>!x.setId))}</section>
  <section class="panel"><div class="row between wrap"><h2>Sets <span class="tag">${s.sets.length}</span></h2><div class="actions"><button data-do="new-set-reps">+ Reps set</button><button class="secondary" data-do="new-set-time">+ Timed set</button></div></div><p class="muted small">Drag ⠿ to reorder sets.</p>
  ${'<div class="sortable-list" data-sort-group="set">'}${s.sets.map((t,i)=>{const localIssues=issues.filter(x=>x.setId===t.id);return `<article class="card sortable-card" data-sort-id="${esc(t.id)}"><div class="row between top"><div class="flex"><div class="card-title">${i+1}. ${esc(t.name)}</div><div class="card-meta">${t.type==='reps'?'Reps-based · '+t.repetitions+' repetitions':'Time-based · '+t.duration.min+'–'+t.duration.max+'s'} · ${t.actions.length} action${t.actions.length===1?'':'s'}</div></div><div class="card-side">${statusChip(localIssues)}<button type="button" class="drag-handle" data-drag-handle="set" aria-label="Drag to reorder set ${esc(t.name)}" title="Drag to reorder; arrow keys also work" aria-keyshortcuts="ArrowUp ArrowDown">⠿</button></div></div><div class="card-controls"><button data-do="open-set" data-id="${t.id}">Configure</button>${actionButtons(s.sets,i,'set',t.id,s.sets.length>1)}</div></article>`}).join('')}</div></section>`}
  function setPage(){const s=session(),t=set();if(!s||!t)return home();const issues=issuesFor('setId',t.id),group=t.actions.filter(a=>a.exclusive);return `${breadcrumbs('set')}<section class="panel settings-panel"><div class="row between"><h2>Set details</h2>${statusChip(issues)}</div>
@@ -54,7 +66,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  ${field('Set type','set.type',t.type,'select',[['reps','Reps-based'],['time','Time-based']])}
  <div class="settings-divider"></div>
  <h3>${t.type==='reps'?'Repetition rules':'Timing & selection'}</h3>
- ${t.type==='reps'?`<div class="grid">${numberField('Repetitions','set.repetitions',t.repetitions,1,100000)}${field('Action sequence','set.sequence',t.sequence,'select',[['standard','Standard'],['random','Random']])}</div>`:`<div class="grid">${numberField('Minimum set duration (sec)','set.duration.min',t.duration.min,1,86400)}${numberField('Maximum set duration (sec)','set.duration.max',t.duration.max,1,86400)}</div>${field('Selection priority','set.timeSelectionPriority',t.timeSelectionPriority||'weights','select',[ ['weights','Weights first (allow repeats)'], ['avoidRepeat','Avoid consecutive repetitions first'] ])}<p class="hint">The last action is shortened at the set deadline.</p>`}
+ ${t.type==='reps'?`<div class="grid">${numberField('Repetitions','set.repetitions',t.repetitions,1,100000)}${field('Action sequence','set.sequence',t.sequence,'select',[['standard','Standard'],['random','Random']])}</div>`:`<div class="grid range-grid">${numberField('Minimum set duration (sec)','set.duration.min',t.duration.min,1,86400)}${numberField('Maximum set duration (sec)','set.duration.max',t.duration.max,1,86400)}</div>${field('Selection priority','set.timeSelectionPriority',t.timeSelectionPriority||'weights','select',[ ['weights','Weights first (allow repeats)'], ['avoidRepeat','Avoid consecutive repetitions first'] ])}<p class="hint">The last action is shortened at the set deadline.</p>`}
  ${issueHTML(issues.filter(x=>!x.actionId))}</section>
  <section class="panel"><div class="row between wrap"><h2>Actions <span class="tag">${t.actions.length}</span></h2><button data-do="new-action">+ Add action</button></div><p class="muted small">Drag ⠿ to reorder actions.</p>
  ${t.type==='reps'&&group.length?`<div class="exclusive"><strong>Mutual-exclusion group:</strong> ${group.length} action${group.length===1?'':'s'}, total ${group.reduce((sum,a)=>sum+a.probability,0)}%. ${group.length<2?'Add a second exclusive action.':group.reduce((sum,a)=>sum+a.probability,0)!==100?'Adjust probabilities to total 100%.':'Group is valid.'}</div>`:''}
@@ -63,10 +75,9 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  function actionPage(){const s=session(),t=set(),a=action();if(!s||!t||!a)return home();const issues=issuesFor('actionId',a.id);return `${breadcrumbs('action')}
  <section class="panel settings-panel"><div class="row between"><h2>Basics</h2>${statusChip(issues)}</div>
  ${nameField('Action name','action.name',a.name)}
- <div class="grid">${numberField('Minimum duration (sec)','action.duration.min',a.duration.min,1,86400)}${numberField('Maximum duration (sec)','action.duration.max',a.duration.max,1,86400)}</div>
+ <div class="grid range-grid">${numberField('Minimum duration (sec)','action.duration.min',a.duration.min,1,86400)}${numberField('Maximum duration (sec)','action.duration.max',a.duration.max,1,86400)}</div>
  <div class="settings-divider"></div>
- <h3>Voice announcement</h3>
- ${field('Spoken instruction','action.ttsName',a.ttsName,'text','maxlength="300"')}
+ ${field('Voice announcement','action.ttsName',a.ttsName,'text','maxlength="300"')}
  <div class="actions"><button class="ghost" data-do="restore-tts">Use action name</button><button class="secondary" data-do="test-tts">Test voice</button></div>
  </section>
  <section class="panel settings-panel"><h2>Selection</h2>
@@ -74,7 +85,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  </section>
  <section class="panel settings-panel"><h2>Metronome</h2>
  <label class="toggle"><input type="checkbox" data-field="action.metronome" ${a.metronome?'checked':''}><strong>Enable metronome</strong></label>
- ${a.metronome?`<div class="grid">${numberField('Start BPM','action.bpmStart',a.bpmStart??a.bpm,20,300)}${numberField('Finish BPM','action.bpmFinish',a.bpmFinish??a.bpm,20,300)}</div>${field('BPM behavior','action.bpmMode',a.bpmMode||'static','select',[['static','Static (random per execution)'],['progressive','Progressive (during action)']])}<p class="hint">Progressive tempo follows the original planned duration, including when the set ends early.</p><div class="actions"><button class="secondary" data-do="test-metronome">Test metronome (5s)</button></div>`:''}
+ ${a.metronome?`<div class="grid range-grid">${numberField('Start BPM','action.bpmStart',a.bpmStart??a.bpm,20,300)}${numberField('Finish BPM','action.bpmFinish',a.bpmFinish??a.bpm,20,300)}</div>${field('BPM behavior','action.bpmMode',a.bpmMode||'static','select',[['static','Static (random per execution)'],['progressive','Progressive (during action)']])}<p class="hint">Progressive tempo follows the original planned duration, including when the set ends early.</p><div class="actions"><button class="secondary" data-do="test-metronome">Test metronome (5s)</button></div>`:''}
  ${issueHTML(issues)}
  </section>`}
  function fmt(ms){const sec=Math.floor(Math.max(0,ms)/1000);return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0');}
@@ -95,9 +106,13 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  }
  function nativeStop(){if(window.AndroidSpeech){AndroidSpeech.stop();AndroidSpeech.keepScreenOn(false);}else if(window.speechSynthesis)speechSynthesis.cancel();}
  function sayCurrent(){if(!runner||runner.state.status!=='running')return;const item=runner.current();if(!item)return;announcedIndex=runner.state.index;
-   if(window.AndroidSpeech&&typeof AndroidSpeech.startAction==='function')
+   if(window.AndroidSpeech&&typeof AndroidSpeech.startAction==='function'){
+     if(typeof AndroidSpeech.setPreferredVoice==='function')AndroidSpeech.setPreferredVoice(session()?.voiceName||'');
      AndroidSpeech.startAction(item.ttsName,'system',Boolean(item.metronome),Number(item.bpmStart)||120,Number(item.bpmFinish)||120,item.bpmMode==='progressive',item.plannedDurationMs,runner.state.actionElapsedMs);
-   else if(window.AndroidSpeech)AndroidSpeech.speak(item.ttsName,'system');
+   }else if(window.AndroidSpeech){
+     if(typeof AndroidSpeech.setPreferredVoice==='function')AndroidSpeech.setPreferredVoice(session()?.voiceName||'');
+     AndroidSpeech.speak(item.ttsName,'system');
+   }
    else if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(item.ttsName));}
  }
  function finishRun(){clearInterval(timerHandle);timerHandle=null;nativeStop();if(!completionPlayed){completionPlayed=true;if(window.AndroidSpeech)AndroidSpeech.playCompletionSound();else new Audio('session_end_bong.wav').play().catch(()=>{});}render();}
@@ -166,7 +181,7 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
  if(cmd==='delete-action'){const t=set(),a=t.actions.find(x=>x.id===id);if(!a)return;if(t.actions.length<=1){toast('Every set must have at least one action.',true);return;}if(!confirm('Delete action "'+a.name+'"?'))return;t.actions=t.actions.filter(x=>x.id!==id);save();render();toast('Action deleted.');return;}
   if(cmd==='restore-tts'){const a=action();if(a){a.ttsName=a.name;a.ttsCustomized=false;save();render();toast('Announcement now follows the action name.')}return;}
  if(cmd==='test-metronome'){const a=action();if(!a?.metronome)return toast('Enable the metronome first.',true);if(window.AndroidSpeech&&typeof AndroidSpeech.testMetronome==='function'){AndroidSpeech.testMetronome(Number(a.bpmStart??a.bpm)||120);toast('Previewing the starting BPM for 5 seconds.');}else toast('Metronome test requires the Stage 3.1 Android app.',true);return;}
- if(cmd==='test-tts'){const a=action();if(!a?.ttsName.trim())return toast('Enter an announcement first.',true);if(window.AndroidSpeech){AndroidSpeech.speak(a.ttsName,'system');toast('Sending announcement to Android TTS.')}else if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(a.ttsName));}else toast('Speech preview is available in Android.',true);return;}
+ if(cmd==='test-tts'){const a=action();if(!a?.ttsName.trim())return toast('Enter an announcement first.',true);if(window.AndroidSpeech){if(typeof AndroidSpeech.setPreferredVoice==='function')AndroidSpeech.setPreferredVoice(session()?.voiceName||'');AndroidSpeech.speak(a.ttsName,'system');toast('Sending announcement to Android TTS.')}else if(window.speechSynthesis){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(a.ttsName));}else toast('Speech preview is available in Android.',true);return;}
  if(cmd==='test-end'){if(window.AndroidSpeech&&typeof AndroidSpeech.playCompletionSound==='function'){AndroidSpeech.playCompletionSound();toast('Playing end-of-session chime.');}else{new Audio('session_end_bong.wav').play().then(()=>toast('Playing end-of-session chime.')).catch(()=>toast('Audio preview unavailable.',true));}return;}
  if(cmd==='export'){const data=JSON.stringify(store,null,2),name='random-workout-sessions-'+new Date().toISOString().slice(0,10)+'.json';if(window.AndroidSpeech&&typeof AndroidSpeech.exportConfiguration==='function'){AndroidSpeech.exportConfiguration(data,name);toast('Choose where to save your JSON backup.')}else{const url=URL.createObjectURL(new Blob([data],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}return;}
  if(cmd==='import'){if(window.AndroidSpeech&&typeof AndroidSpeech.importConfiguration==='function'){AndroidSpeech.importConfiguration();}else $('#importFile').click();return;}
@@ -309,6 +324,10 @@ function home(){return `<section class="panel"><div class="row between wrap"><di
   else toast(content||'Could not read the selected backup.',true);
  };
  window.onNativeBackupEvent=(state,detail)=>toast(detail,state!=='ok');
- window.onNativeSpeechEvent=(state,detail)=>{if(state==='metronome-error')toast(detail||'Metronome failed to start.',true);else if(state==='metronome-test-started'||state==='metronome-test-ended')toast(detail);};
+ window.onNativeSpeechEvent=(state,detail)=>{
+   if(state==='ready'&&route.screen==='session'&&!$('#app').contains(document.activeElement))render();
+   if(state==='metronome-error'||state==='voice-unavailable')toast(detail||'Native audio unavailable.',true);
+   else if(state==='metronome-test-started'||state==='metronome-test-ended')toast(detail);
+ };
  render();
 })();
