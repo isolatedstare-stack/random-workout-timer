@@ -13,7 +13,8 @@
   const range = (min, max) => ({min, max});
   const newAction = (name = 'Action 1') => ({id: id(), name, ttsName: name, ttsCustomized: false,
     duration: range(20, 40), exclusive: false, probability: 0, weight: 1,
-    metronome: false, bpm: 120, bpmStart: 120, bpmFinish: 120, bpmMode: 'static'});
+    metronome: false, bpm: 120, bpmStart: 120, bpmFinish: 120,
+    bpmMin: null, bpmMax: null, bpmMode: 'static'});
   const newSet = (name = 'Set 1') => ({id: id(), name, type: 'reps', repetitions: 3,
     sequence: 'standard', duration: range(180, 300), timeSelectionPriority: 'weights', actions: [newAction()]});
   const newSession = (name = 'Session 1') => ({id: id(), name, voiceName: '', sets: [newSet()]});
@@ -74,11 +75,19 @@
           if (set.type === 'time' && !(Number.isFinite(action.weight ?? 1) && (action.weight ?? 1) > 0 && (action.weight ?? 1) <= 1000000))
             issues.push({...al, message: 'Action weight must be greater than 0 and at most 1,000,000.'});
           if (action.metronome) {
-            const start = action.bpmStart ?? action.bpm, finish = action.bpmFinish ?? action.bpm;
-            if (!inRangeInteger(start, 20, 300) || !inRangeInteger(finish, 20, 300))
-              issues.push({...al, message: 'Start and finish BPM must both be integers from 20 to 300.'});
-            if (!['static','progressive'].includes(action.bpmMode ?? 'static'))
-              issues.push({...al, message: 'Choose static (random) or progressive BPM.'});
+            const mode = action.bpmMode ?? 'static';
+            if (!['static','progressive','randomWalk'].includes(mode))
+              issues.push({...al, message: 'Choose static, progressive, or random progression BPM.'});
+            if (mode === 'randomWalk') {
+              const start = action.bpmStart, min = action.bpmMin, max = action.bpmMax;
+              if (![start,min,max].every(n => inRangeInteger(n,20,300)) ||
+                  min > max || start < min || start > max || min === max)
+                issues.push({...al, message: 'Random progression needs a starting BPM within a minimum–maximum range (20–300 BPM, minimum below maximum).'});
+            } else {
+              const start = action.bpmStart ?? action.bpm, finish = action.bpmFinish ?? action.bpm;
+              if (!inRangeInteger(start, 20, 300) || !inRangeInteger(finish, 20, 300))
+                issues.push({...al, message: 'Start and finish BPM must both be integers from 20 to 300.'});
+            }
           }
         });
       });
@@ -112,6 +121,8 @@
             bpm: a.bpm === null ? null : Number(a.bpmStart ?? a.bpm ?? 120),
             bpmStart: a.bpmStart === null ? null : Number(a.bpmStart ?? a.bpm ?? 120),
             bpmFinish: a.bpmFinish === null ? null : Number(a.bpmFinish ?? a.bpm ?? 120),
+            bpmMin: a.bpmMin == null ? null : Number(a.bpmMin),
+            bpmMax: a.bpmMax == null ? null : Number(a.bpmMax),
             bpmMode: a.bpmMode ?? 'static'});
         }
         session.sets.push(set);
