@@ -49,3 +49,9 @@ assert.match(native,/voice\.isNetworkConnectionRequired\(\)/);
 assert.match(native,/tts\.setVoice\(chosen\)/);
 assert.match(ui,/session\(\)\?\.voiceName\|\|''/);
 console.log('Session-scoped offline TTS voices: PASSED');
+
+assert.match(native,/void setWorkoutFullscreen\(boolean enabled\)/);
+assert.match(native,/View\.SYSTEM_UI_FLAG_IMMERSIVE_STICKY/);
+assert.match(native,/entry\.put\("languageTag",voice\.getLocale\(\)\.toLanguageTag\(\)\)/);
+assert.match(ui,/AndroidSpeech\.setWorkoutFullscreen\(full\)/);
+console.log('Immersive player and voice-preview bridge: PASSED');
