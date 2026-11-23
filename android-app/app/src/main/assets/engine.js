@@ -7,6 +7,9 @@
   'use strict';
   const MAX_OCCURRENCES = 20000;
   const MAX_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+  // Once every 4 seconds choose a fresh direction and a small BPM increment.
+  // The complete path is decided at planning time so audio and display agree.
+  const RANDOM_BPM_STEP_MS = 4000;
   function unitRandom(rng) {
     const x = Number(rng());
     if (!Number.isFinite(x) || x < 0 || x >= 1) throw new Error('Random generator returned an invalid number.');
@@ -41,8 +44,27 @@
     }
     return actions[actions.length - 1];
   }
-  // The last BPM increment occurs one segment before the planned action ends.
+  function randomBpmCurve(start,min,max,durationMs,rng=Math.random) {
+    if (![start,min,max].every(n => Number.isSafeInteger(n) && n>=20 && n<=300) ||
+        min>=max || start<min || start>max || !Number.isFinite(durationMs) || durationMs<=0)
+      throw new Error('Invalid random progression tempo or duration.');
+    const curve=[start];
+    let bpm=start;
+    for(let t=RANDOM_BPM_STEP_MS;t<durationMs;t+=RANDOM_BPM_STEP_MS) {
+      const direction=unitRandom(rng)<0.5?-1:1;
+      const delta=between(2,7,rng);
+      const safeDirection=bpm<=min?1:bpm>=max?-1:direction;
+      bpm=Math.min(max,Math.max(min,bpm+safeDirection*delta));
+      curve.push(bpm);
+    }
+    return curve;
+  }
+  // The last progressive BPM increment occurs one segment before the planned action ends.
   function bpmAtElapsed(item, elapsedMs) {
+    if(item.bpmMode==='randomWalk'&&Array.isArray(item.bpmCurve)&&item.bpmCurve.length) {
+      const step=Math.min(item.bpmCurve.length-1,Math.floor(Math.max(0,elapsedMs)/RANDOM_BPM_STEP_MS));
+      return item.bpmCurve[step];
+    }
     if (item.bpmMode !== 'progressive' || item.bpmStart === item.bpmFinish) return item.bpm;
     const difference = item.bpmFinish - item.bpmStart;
     const steps = Math.abs(difference);
@@ -77,7 +99,7 @@
       if (totalMs > MAX_SESSION_MS) throw new Error('Session exceeds the 7-day duration safety limit.');
       const baseStart = action.bpmStart ?? action.bpm ?? 120;
       const baseFinish = action.bpmFinish ?? action.bpm ?? 120;
-      const bpmMode = action.bpmMode === 'progressive' ? 'progressive' : 'static';
+      const bpmMode = ['progressive','randomWalk'].includes(action.bpmMode) ? action.bpmMode : 'static';
       const chosenBpm = action.metronome && bpmMode === 'static'
         ? between(Math.min(baseStart, baseFinish), Math.max(baseStart, baseFinish), rng) : baseStart;
       const item = {index: items.length, setIndex, repetition, actionId: action.id,
@@ -85,6 +107,11 @@
         bpmMode, bpm: chosenBpm, bpmStart: chosenBpm,
         bpmFinish: bpmMode === 'progressive' ? baseFinish : chosenBpm,
         durationMs, plannedDurationMs: nominalSeconds * 1000};
+      if(action.metronome&&bpmMode==='randomWalk'){
+        item.bpmMin=action.bpmMin;
+        item.bpmMax=action.bpmMax;
+        item.bpmCurve=randomBpmCurve(baseStart,action.bpmMin,action.bpmMax,durationMs,rng);
+      }
       items.push(item);
       return item;
     };
@@ -177,5 +204,5 @@
       remainingSetMs() {const item=current();return item?Math.max(0,state.setTotalMs[item.setIndex]-state.setPlayedMs[item.setIndex]):0;}
     };
   }
-  return {createPlan,createRunner,bpmAtElapsed,MAX_OCCURRENCES};
+  return {createPlan,createRunner,bpmAtElapsed,randomBpmCurve,RANDOM_BPM_STEP_MS,MAX_OCCURRENCES};
 });
