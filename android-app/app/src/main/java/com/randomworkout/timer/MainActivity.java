@@ -3,6 +3,7 @@ package com.randomworkout.timer;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -107,6 +108,14 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         // Legacy Back button/gesture dispatch (Android 12 and below).
         dispatchBackToWeb();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Keep the same Activity, WebView, JS workout runner, native audio and
+        // wake lock through portrait/landscape changes. Only remeasure the view.
+        if (webView != null) webView.requestLayout();
     }
 
     private void setupTts() {

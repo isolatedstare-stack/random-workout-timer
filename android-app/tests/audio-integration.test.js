@@ -78,3 +78,16 @@ assert.match(metro,/randomBpmAt\(randomCurve, elapsedMs\)/);
 assert.match(metro,/step < min \|\| step > max/);
 assert.match(ui,/Finish BPM is the other boundary, not a required endpoint/);
 console.log('Native random BPM curve playback and limits: PASSED');
+
+const rotationManifest = fs.readFileSync(path.join(base,'AndroidManifest.xml'),'utf8');
+const changes = rotationManifest.match(/android:configChanges="([^"]+)"/);
+assert.ok(changes,'Explicitly handle configuration changes without recreating the Activity');
+for (const change of ['orientation','screenSize','smallestScreenSize','screenLayout','keyboardHidden'])
+  assert.ok(changes[1].split('|').includes(change),change+' handled in place');
+assert.match(native,/import android\.content\.res\.Configuration;/);
+assert.match(native,/void onConfigurationChanged\(Configuration newConfig\)/);
+assert.match(native,/super\.onConfigurationChanged\(newConfig\)/);
+assert.match(native,/webView\.requestLayout\(\)/);
+assert.doesNotMatch(native,/void onConfigurationChanged\([\s\S]*?\)[\s\S]*?webView\.loadUrl\(/,
+ 'Do not reload the workout page after rotation');
+console.log('Keep workout state and metronome alive on orientation change: PASSED');
