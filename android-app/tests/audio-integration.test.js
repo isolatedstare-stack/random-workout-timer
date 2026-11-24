@@ -88,6 +88,9 @@ assert.match(native,/import android\.content\.res\.Configuration;/);
 assert.match(native,/void onConfigurationChanged\(Configuration newConfig\)/);
 assert.match(native,/super\.onConfigurationChanged\(newConfig\)/);
 assert.match(native,/webView\.requestLayout\(\)/);
-assert.doesNotMatch(native,/void onConfigurationChanged\([\s\S]*?\)[\s\S]*?webView\.loadUrl\(/,
- 'Do not reload the workout page after rotation');
+const rotationHandler = native.split('void onConfigurationChanged(Configuration newConfig)')[1]
+  ?.split('private void setupTts()')[0];
+assert.ok(rotationHandler,'Orientation-change handler must be present');
+assert.doesNotMatch(rotationHandler,/webView\.loadUrl\(|setupWebView\(|finish\(/,
+ 'Do not reload or exit the workout after rotation');
 console.log('Keep workout state and metronome alive on orientation change: PASSED');
